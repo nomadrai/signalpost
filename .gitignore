@@ -1,0 +1,28 @@
+# Generated execution data
+out/
+runs/
+reports/generated/
+*.partial
+*.progress.jsonl
+*.tmp
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.egg-info/
+
+# Optional crawler state
+.scrapy/
+jobdir/
+
+# Local data and secrets
+.env
+.env.*
+!.env.example
+data/*.csv
+data/*.csv.gz
+data/*.jsonl
+data/*.jsonl.gz

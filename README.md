@@ -113,3 +113,27 @@ Submit a repository with:
 - declared models, APIs, licences and source-rights assumptions.
 
 Email the repository URL, run command, models/APIs and expected cost per 100-company run to `submit@builderr.ai`.
+
+## Deterministic batch interface
+
+The bounded runner accepts the supplied organisation-number file and a plain or gzip-compressed Brønnøysund CSV snapshot. It writes an atomic JSONL checkpoint as soon as the registry pass is complete, then replaces rows as best-effort enrichment finishes. Every valid input receives one terminal envelope, including when the deadline or a source policy prevents enrichment.
+
+```bash
+PYTHONPATH=src python scripts/run_batch.py \
+  --input <organisations.jsonl> \
+  --bulk <brreg-enheter.csv> \
+  --profiles-output <run>/profiles.jsonl \
+  --output <run>/envelopes.jsonl \
+  --report <run>/report.json \
+  --run-id <run-id>
+```
+
+The supported terminal states are `available`, `not_available`, `blocked`, `not_applicable`, `ambiguous`, and `failed`. Set `RUN_DEADLINE_SECONDS`, `RUN_DEADLINE_SAFETY_SECONDS`, and `COMPANY_TIMEOUT_SECONDS` in the environment to bound the run. Use `--previous-output` to include source-backed refresh changes. The stable claim/snapshot fields are described in `DATA_SCHEMA.md`.
+
+Build the dependency-light static viewer without a server or external assets:
+
+```bash
+PYTHONPATH=src python scripts/build_viewer.py <run>/envelopes.jsonl <run>/viewer
+```
+
+The viewer includes searchable company cards, profile facts with source links and dates, explicit unknown states, a three-column compare page, and change history. See `AGENT.md`, `CRAWLERS.md`, `IDENTITY_RESOLUTION.md`, `REFRESH.md`, `EVAL.md`, and `LIMITATIONS.md` for the operating boundaries.

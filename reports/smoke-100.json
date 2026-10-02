@@ -1,0 +1,45 @@
+{
+  "report_date": "2026-10-02",
+  "inputs": 100,
+  "outputs": 100,
+  "status_counts": {"available": 100},
+  "section_available": {
+    "identity": 100,
+    "accounts": 99,
+    "leadership": 100,
+    "workplaces": 100,
+    "website": 7,
+    "profiles": 2,
+    "hiring": 0,
+    "activity": 0
+  },
+  "section_not_available": {
+    "accounts": 1,
+    "website": 83,
+    "profiles": 98,
+    "hiring": 100,
+    "activity": 100
+  },
+  "section_ambiguous": {"website": 9},
+  "section_blocked": {"website": 1},
+  "wrong_company_publications_hand_checked": 0,
+  "hand_checked_rows": 25,
+  "wall_runtime_seconds": 126.826,
+  "company_runtime_ms": {"p50": 8095.103, "p95": 19491.518},
+  "request_latency_ms": {"p50": 1632, "p95": 2051},
+  "requests": 600,
+  "response_bytes": 17810586,
+  "peak_rss_kib": 192540,
+  "claims": 3303,
+  "evidence_validation_passed": true,
+  "third_party_cost_usd": 0,
+  "baseline": {
+    "wall_runtime_seconds": 140.48,
+    "requests": 600,
+    "accounts_available": 99,
+    "leadership_available": 100,
+    "workplaces_available": 100,
+    "website_identity_accepted": 7,
+    "wrong_company_publications_hand_checked": 0
+  }
+}

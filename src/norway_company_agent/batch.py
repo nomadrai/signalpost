@@ -8,6 +8,7 @@ from typing import Any, Iterable
 from .evidence import evidence, utc_now
 from .official import accounting_obligation_assessment
 from .sampling import iter_bulk
+from .schema import AVAILABILITY_STATES, build_contract_envelope, validate_claim_evidence
 
 
 TERMINAL_STATES = {
@@ -20,6 +21,19 @@ TERMINAL_STATES = {
     "budget_exhausted",
     "submission_error",
 }
+
+
+def valid_norwegian_organisation_number(value: str | int) -> bool:
+    """Validate the nine-digit Norwegian organisation-number mod-11 check digit."""
+    digits = "".join(character for character in str(value or "") if character.isdigit())
+    if len(digits) != 9:
+        return False
+    weighted_sum = sum(int(digit) * weight for digit, weight in zip(digits[:8], (3, 2, 7, 6, 5, 4, 3, 2)))
+    remainder = weighted_sum % 11
+    check = 11 - remainder
+    if check == 11:
+        check = 0
+    return check != 10 and check == int(digits[-1])
 
 
 def read_organisation_inputs(path: str | Path) -> list[dict[str, Any]]:
@@ -37,8 +51,8 @@ def read_organisation_inputs(path: str | Path) -> list[dict[str, Any]]:
     for value in values:
         org = value.get("organisation_number") if isinstance(value, dict) else value
         org = "".join(character for character in str(org or "") if character.isdigit())
-        if len(org) != 9:
-            raise ValueError(f"Invalid Norwegian organisation number: {value!r}")
+        if len(org) != 9 or not valid_norwegian_organisation_number(org):
+            raise ValueError(f"Invalid Norwegian organisation number or checksum: {value!r}")
         record = {"organisation_number": org}
         if isinstance(value, dict):
             for key in ("evaluation_split", "sample_slice"):
@@ -55,6 +69,26 @@ def read_organisation_numbers(path: str | Path) -> list[str]:
     return [record["organisation_number"] for record in read_organisation_inputs(path)]
 
 
+def profile_from_bulk_record(profile: dict[str, Any], *, snapshot_sha256: str, retrieved_at: str | None = None) -> dict[str, Any]:
+    """Attach immutable registry evidence to one normalized bulk row."""
+    normalized = dict(profile)
+    raw = normalized.pop("raw", {})
+    normalized["evidence"] = {
+        "registry": evidence(
+            "registry",
+            "available",
+            "official_registry_bulk",
+            "https://data.brreg.no/enhetsregisteret/api/enheter/lastned/csv",
+            value=raw,
+            retrieved_at=retrieved_at or utc_now(),
+            content_sha256=snapshot_sha256,
+            source_row_key=str(normalized.get("organisation_number") or ""),
+        ),
+        "accounting_obligation": accounting_obligation_assessment(normalized),
+    }
+    return normalized
+
+
 def profiles_from_bulk(path: str | Path, organisation_numbers: Iterable[str]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     requested = list(organisation_numbers)
     wanted = set(requested)
@@ -67,21 +101,7 @@ def profiles_from_bulk(path: str | Path, organisation_numbers: Iterable[str]) ->
         org = profile["organisation_number"]
         if org not in wanted:
             continue
-        raw = profile.pop("raw", {})
-        profile["evidence"] = {
-            "registry": evidence(
-                "registry",
-                "available",
-                "official_registry_bulk",
-                "https://data.brreg.no/enhetsregisteret/api/enheter/lastned/csv",
-                value=raw,
-                retrieved_at=retrieved_at,
-                content_sha256=snapshot_sha256,
-                source_row_key=org,
-            ),
-            "accounting_obligation": accounting_obligation_assessment(profile),
-        }
-        found[org] = profile
+        found[org] = profile_from_bulk_record(profile, snapshot_sha256=snapshot_sha256, retrieved_at=retrieved_at)
         if len(found) == len(wanted):
             break
     missing = [org for org in requested if org not in found]
@@ -120,25 +140,43 @@ def terminal_envelope(
     modules: Iterable[str],
     started_at: str,
     completed_at: str,
+    errors: list[dict[str, Any]] | None = None,
+    previous: dict[str, Any] | None = None,
+    previous_run_id: str | None = None,
+    status_override: str | None = None,
 ) -> dict[str, Any]:
+    requested_modules = list(modules)
     module_states = {}
-    for module in modules:
+    for module in requested_modules:
         record = profile.get("evidence", {}).get(module)
         module_states[module] = {
             "state": evidence_terminal_state(record),
             "retry_count": int((record or {}).get("retry_count") or 0),
             "final_timestamp": (record or {}).get("retrieved_at") or completed_at,
         }
-    entity_state = "submission_error" if any(item["state"] == "submission_error" for item in module_states.values()) else "complete"
-    return {
-        "run_id": run_id,
-        "organisation_number": profile["organisation_number"],
-        "state": entity_state,
-        "started_at": started_at,
-        "completed_at": completed_at,
-        "modules": module_states,
-        "profile": profile,
-    }
+    registry_record = profile.get("evidence", {}).get("registry") or profile.get("evidence", {}).get("registry_live")
+    # A registry-backed pass-1 envelope is terminal even when optional pass-2
+    # modules were not scheduled before the deadline.
+    entity_state = "complete" if (registry_record or {}).get("status") == "available" else "submission_error"
+    contract = build_contract_envelope(
+        profile,
+        run_id=run_id,
+        started_at=started_at,
+        completed_at=completed_at,
+        requested_modules=requested_modules,
+        errors=errors,
+        previous=previous,
+        previous_run_id=previous_run_id,
+        status_override=status_override,
+    )
+    # Keep the starter's legacy fields for existing consumers while the versioned
+    # contract fields above provide the explicit availability state and claims.
+    contract["state"] = entity_state
+    contract["status"] = "available" if entity_state == "complete" else "failed"
+    contract["modules"] = module_states
+    contract["started_at"] = started_at
+    contract["completed_at"] = completed_at
+    return contract
 
 
 def validate_envelopes(envelopes: list[dict[str, Any]], expected_count: int) -> dict[str, Any]:
@@ -149,14 +187,21 @@ def validate_envelopes(envelopes: list[dict[str, Any]], expected_count: int) -> 
         for state in item.get("modules", {}).values()
         if state.get("state") not in TERMINAL_STATES
     ]
+    evidence_errors = {
+        str(item.get("organisation_number") or ""): validate_claim_evidence(item)
+        for item in envelopes
+        if validate_claim_evidence(item)
+    }
     checks = {
         "exact_expected_count": len(envelopes) == expected_count,
         "unique_organisation_numbers": len(orgs) == len(set(orgs)),
         "all_entity_states_terminal": all(item.get("state") in TERMINAL_STATES for item in envelopes),
+        "all_availability_statuses_valid": all(item.get("status") in AVAILABILITY_STATES for item in envelopes),
         "all_module_states_terminal": not invalid_states,
+        "all_claims_have_evidence": not evidence_errors,
         "zero_silent_drops": len(envelopes) == expected_count and len(orgs) == len(set(orgs)),
     }
-    return {"passed": all(checks.values()), "checks": checks, "invalid_states": invalid_states}
+    return {"passed": all(checks.values()), "checks": checks, "invalid_states": invalid_states, "evidence_errors": evidence_errors}
 
 
 def profile_complete_for_modules(profile: dict[str, Any], modules: Iterable[str]) -> bool:

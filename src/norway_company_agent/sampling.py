@@ -6,6 +6,7 @@ import hashlib
 import random
 import heapq
 import urllib.parse
+from contextlib import nullcontext
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -142,10 +143,25 @@ def deterministic_financial_filer_sample(
 
 
 def iter_bulk(path: str | Path) -> Iterable[dict[str, Any]]:
-    with gzip.open(path, "rt", encoding="utf-8-sig", newline="") as handle:
+    """Iterate either a plain or gzip-compressed Brreg CSV snapshot.
+
+    The README names the download as CSV while some mirrors return a gzip file.
+    Detecting the bytes keeps both documented forms deterministic and avoids a
+    caller having to rename a snapshot before using it.
+    """
+    source = Path(path)
+    with source.open("rb") as raw_handle:
+        magic = raw_handle.read(2)
+    compressed = source.suffix.casefold() in {".gz", ".gzip"} or magic == b"\x1f\x8b"
+    opener = gzip.open if compressed else open
+    context = opener(source, "rt", encoding="utf-8-sig", newline="") if compressed else nullcontext(opener(source, "r", encoding="utf-8-sig", newline=""))
+    with context as handle:
         sample = handle.read(8192)
         handle.seek(0)
-        dialect = csv.Sniffer().sniff(sample, delimiters=";,\t")
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=";,\t")
+        except csv.Error:
+            dialect = csv.excel
         for row in csv.DictReader(handle, dialect=dialect):
             record = normalize_row(row)
             if len(record["organisation_number"]) == 9:
