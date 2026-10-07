@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import math
+import multiprocessing
 import os
 import sys
 import time
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -21,12 +22,12 @@ from norway_company_agent.batch import (  # noqa: E402
     terminal_envelope,
     validate_envelopes,
 )
-from norway_company_agent.budget import BudgetGovernor  # noqa: E402
+from norway_company_agent.budget import BudgetGovernor, RunBudget  # noqa: E402
 from norway_company_agent.evidence import evidence, utc_now  # noqa: E402
-from norway_company_agent.identity import apply_website_identity_gate  # noqa: E402
-from norway_company_agent.official import fetch_official_modules  # noqa: E402
-from norway_company_agent.sampling import iter_bulk  # noqa: E402
-from norway_company_agent.website import fetch_website  # noqa: E402
+from norway_company_agent.enrichment import enrich_module  # noqa: E402
+from norway_company_agent.official import official_endpoints  # noqa: E402
+from norway_company_agent.sampling import iter_bulk, snapshot_sha256 as hash_snapshot  # noqa: E402
+from norway_company_agent.workers import BoundedWorkers  # noqa: E402
 
 
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -142,27 +143,37 @@ def main() -> None:
     input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument("--organisations", dest="organisations", help="JSON, JSONL, or text organisation-number list")
     input_group.add_argument("--input", dest="organisations", help="Alias for --organisations")
-    parser.add_argument("--bulk", required=True, help="Frozen Brreg entity snapshot, plain CSV or gzip CSV")
+    parser.add_argument("--bulk", required=True, help="Frozen registry CSV or normalized universe JSONL, optionally gzip")
     parser.add_argument("--output", required=True, help="Final terminal envelope JSONL")
     parser.add_argument("--profiles-output", required=True, help="Profile checkpoint JSONL")
     parser.add_argument("--report", required=True, help="Run report JSON")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--expected-count", type=int)
     parser.add_argument("--workers", type=int, default=8)
-    parser.add_argument("--checkpoint-every", type=int, default=1)
+    parser.add_argument("--checkpoint-every", type=int, default=25)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--previous-output", help="Previous envelope/profile JSONL for refresh changes")
     parser.add_argument("--deadline-seconds", type=float, default=None)
     parser.add_argument("--company-timeout-seconds", type=float, default=None)
+    parser.add_argument("--max-requests", type=int, default=int(os.environ.get("MAX_OUTBOUND_REQUESTS") or "2000"))
+    parser.add_argument("--response-snapshot", help="Saved official responses: JSON object with a responses URL map")
     parser.add_argument("--modules", default="registry,accounting_obligation,registry_live,financials,roles,group,locations,website")
     args = parser.parse_args()
 
     started_at = utc_now()
-    started_monotonic = time.monotonic()
-    budget = BudgetGovernor.from_environment()
-    deadline_seconds = max(0.0, args.deadline_seconds if args.deadline_seconds is not None else _deadline_value("RUN_DEADLINE_SECONDS", 300.0))
+    started_monotonic = float(os.environ.get("_SIGNALPOST_STARTED_MONOTONIC", time.monotonic()))
+    governor = BudgetGovernor.from_environment()
+    deadline_seconds = args.deadline_seconds if args.deadline_seconds is not None else _deadline_value("RUN_DEADLINE_SECONDS", 2700.0)
+    if not math.isfinite(deadline_seconds) or not 0 <= deadline_seconds <= 2700:
+        parser.error("--deadline-seconds must be finite and between 0 and 2700")
+    if not 0 <= args.max_requests <= 2000:
+        parser.error("--max-requests must be between 0 and 2000")
+    if not math.isfinite(governor.max_cost_usd) or not 0 <= governor.max_cost_usd <= 10:
+        parser.error("MAX_COST_USD must be finite and between 0 and 10")
     safety_margin = _deadline_value("RUN_DEADLINE_SAFETY_SECONDS", 5.0)
     company_timeout = max(0.1, args.company_timeout_seconds if args.company_timeout_seconds is not None else _deadline_value("COMPANY_TIMEOUT_SECONDS", 45.0))
+    if not math.isfinite(safety_margin) or not math.isfinite(company_timeout):
+        parser.error("Safety margin and company timeout must be finite")
     stop_scheduling_at = started_monotonic + max(0.0, deadline_seconds - safety_margin)
 
     organisation_inputs = read_organisation_inputs(args.organisations)
@@ -171,12 +182,15 @@ def main() -> None:
     if len(orgs) != expected_count:
         raise SystemExit(f"Expected {expected_count} organisations, received {len(orgs)}")
     requested_modules = [item.strip() for item in args.modules.split(",") if item.strip()]
+    allowed_modules = {"registry", "accounting_obligation", "website", *official_endpoints("000000000")}
+    if set(requested_modules) - allowed_modules:
+        parser.error(f"Unknown modules: {sorted(set(requested_modules) - allowed_modules)}")
     previous_profiles, previous_run_id = _load_previous_profiles(Path(args.previous_output) if args.previous_output else None)
     output_path = Path(args.output)
     profiles_path = Path(args.profiles_output)
 
     bulk_path = Path(args.bulk)
-    snapshot_sha256 = hashlib.sha256(bulk_path.read_bytes()).hexdigest()
+    snapshot_sha256 = hash_snapshot(bulk_path)
     registry_retrieved_at = utc_now()
     wanted = set(orgs)
     found: dict[str, dict[str, Any]] = {}
@@ -185,7 +199,7 @@ def main() -> None:
         scanned += 1
         org = str(row.get("organisation_number") or "")
         if org in wanted:
-            found[org] = profile_from_bulk_record(row, snapshot_sha256=snapshot_sha256, retrieved_at=registry_retrieved_at)
+            found[org] = profile_from_bulk_record(row, snapshot_sha256=snapshot_sha256, retrieved_at=registry_retrieved_at, snapshot_uri=bulk_path.resolve().as_uri())
             if len(found) == len(wanted):
                 break
 
@@ -200,9 +214,11 @@ def main() -> None:
         if org in found:
             profile = found[org]
             prior = prior_profiles.get(org)
-            if prior and profile_complete_for_modules(prior, requested_modules):
+            if prior and (prior.get("evidence", {}).get("registry", {}).get("content_sha256") == snapshot_sha256):
                 profile = prior
-                resumed_orgs.add(org)
+                if profile_complete_for_modules(prior, requested_modules):
+                    resumed_orgs.add(org)
+            profile["run_metrics"] = {"requests": 0, "bytes": 0, "latencies_ms": [], "runtime_ms": 0, "snapshot_reads": 0}
             for key in ("evaluation_split", "sample_slice"):
                 if key in annotations[org]:
                     profile[key] = annotations[org][key]
@@ -249,102 +265,123 @@ def main() -> None:
     for org in orgs:
         append_progress(journal_path, latest[org], "pass1")
 
-    fetch_modules = set(requested_modules) - {"registry", "accounting_obligation", "website"}
-    completed_pass2 = 0
-    skipped_pass2 = 0
+    context = multiprocessing.get_context("spawn")
+    budget = RunBudget(max_requests=args.max_requests, deadline=stop_scheduling_at,
+                       companies=len(orgs), governor=governor, context=context,
+                       ledger_path=str(output_path.with_suffix(output_path.suffix + ".budget.jsonl")), run_id=args.run_id)
+    resume_budget_unknown = False
+    if args.resume and prior_profiles:
+        report_path = Path(args.report)
+        prior_report = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else {}
+        if prior_report.get("run_id") == args.run_id and "budget" in prior_report:
+            previous_budget = prior_report["budget"]
+            budget.requests.value = int(previous_budget.get("outbound_requests", args.max_requests))
+            budget.cost.value = budget._cost_units(float(previous_budget.get("cost_usd", 0)))
+            budget.llm_calls.value = int(previous_budget.get("llm_calls", 0))
+            budget.llm_tokens.value = int(previous_budget.get("llm_tokens", 0))
+            budget.search_calls.value = int(previous_budget.get("search_calls", 0))
+            elapsed_before_resume = float(prior_report.get("elapsed_seconds", 0))
+            started_monotonic -= elapsed_before_resume
+            stop_scheduling_at -= elapsed_before_resume
+            budget.deadline = stop_scheduling_at
+        else:
+            # An interrupted run can have sent requests absent from its last
+            # checkpoint. Fail closed instead of resetting the daily allowance.
+            budget.requests.value = args.max_requests
+            resume_budget_unknown = True
+    initial_requests = budget.requests.value
+    Path(budget.ledger_path).write_text(json.dumps({"run_id": args.run_id, **budget.report()}) + "\n", encoding="utf-8")
+    saved_responses = json.loads(Path(args.response_snapshot).read_text(encoding="utf-8")) if args.response_snapshot else {}
+    if saved_responses and not isinstance(saved_responses.get("responses"), dict):
+        parser.error("--response-snapshot must contain a responses URL map")
+    completed_orgs = set()
+    skipped_orgs = set()
     pass2_errors = 0
-
-    def enrich(profile: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-        company_started = time.monotonic()
-        records, metrics = fetch_official_modules(profile["organisation_number"], fetch_modules)
-        profile.setdefault("evidence", {}).update(records)
-        website_metrics = {"requests": 0, "bytes": 0, "latencies_ms": []}
-        if "website" in requested_modules:
-            website_record, website_metrics = fetch_website(profile.get("website"))
-            profile.setdefault("evidence", {})["website"] = apply_website_identity_gate(profile, website_record)["website"]
-        metric = {
-            "requests": len(metrics) + website_metrics["requests"],
-            "bytes": sum(item.bytes_received for item in metrics) + website_metrics["bytes"],
-            "latencies_ms": [item.elapsed_ms for item in metrics] + website_metrics["latencies_ms"],
-            "runtime_ms": round((time.monotonic() - company_started) * 1000, 3),
-        }
-        profile["run_metrics"] = metric
-        return profile, metric
-
-    pending = [profiles[org] for org in orgs if org in found and org not in resumed_orgs]
-    pending.sort(key=lambda item: (not bool(item.get("website")), str(item.get("organisation_number") or "")))
-    workers = max(1, int(args.workers))
-    executor = ThreadPoolExecutor(max_workers=workers)
-    active: dict[Any, tuple[str, float]] = {}
-    pending_index = 0
-    try:
-        while pending_index < len(pending) or active:
-            while pending_index < len(pending) and len(active) < workers and time.monotonic() < stop_scheduling_at:
-                profile = pending[pending_index]
-                pending_index += 1
-                future = executor.submit(enrich, profile)
-                active[future] = (str(profile["organisation_number"]), time.monotonic())
-            if not active:
-                break
-            remaining = max(0.0, stop_scheduling_at - time.monotonic())
-            done, _ = wait(tuple(active), timeout=min(0.25, remaining) if remaining else 0, return_when=FIRST_COMPLETED)
-            if not done:
-                if time.monotonic() >= stop_scheduling_at:
-                    break
+    completed_tasks = 0
+    skipped_tasks = 0
+    priority = ["website", "financials", "roles", "locations", "registry_live", "group", "financial_history"]
+    tasks = []
+    for module in priority:
+        if module not in requested_modules:
+            continue
+        for index, org in enumerate(orgs):
+            if org not in found or profile_complete_for_modules(profiles[org], [module]):
                 continue
-            for future in done:
-                org, submitted_at = active.pop(future)
-                try:
-                    profile, _metric = future.result(timeout=max(0.0, company_timeout - (time.monotonic() - submitted_at)))
-                    profiles[org] = profile
-                    latest[org] = _build_envelope(
-                        profile,
-                        run_id=args.run_id,
-                        started_at=started_at,
-                        completed_at=utc_now(),
-                        modules=requested_modules,
-                        errors=errors_by_org.get(org, []),
-                        previous=previous_profiles.get(org),
-                        previous_run_id=previous_run_id,
-                    )
-                    completed_pass2 += 1
-                except Exception as exc:
-                    message = f"{type(exc).__name__}: {exc}"
-                    item = _error("company_enrichment_failed", message, "pass2")
-                    errors_by_org.setdefault(org, []).append(item)
+            saved = module != "website" and official_endpoints(org)[module][0] in saved_responses.get("responses", {})
+            tasks.append({"module": module, "organisation_number": org, "company_index": index, "saved": saved})
+    # Supplied responses require no live requests and precede all network work.
+    tasks.sort(key=lambda task: not task["saved"])
+    workers = max(1, int(args.workers))
+    pool = BoundedWorkers(enrich_module, (budget, saved_responses), workers, context=context)
+    pending_index = 0
+    dirty = set()
+
+    def skip(task, reason):
+        nonlocal skipped_tasks
+        org, module = task["organisation_number"], task["module"]
+        url, source_type = (profiles[org].get("website") or "https://data.brreg.no/enhetsregisteret/api/enheter", "registry_linked_company_website") if module == "website" else official_endpoints(org)[module]
+        profiles[org].setdefault("evidence", {})[module] = evidence(module, "not_fetched", source_type, url, note=reason)
+        skipped_orgs.add(org)
+        skipped_tasks += 1
+        code = "deadline_pass2_skipped" if reason == "run_deadline" else "request_budget_exhausted"
+        if not any(item["code"] == code for item in errors_by_org.get(org, [])):
+            errors_by_org.setdefault(org, []).append(_error(code, reason, "pass2"))
+
+    try:
+        while pending_index < len(tasks) or pool.active:
+            if time.monotonic() >= stop_scheduling_at:
+                break
+            while pending_index < len(tasks) and pool.active < workers and time.monotonic() < stop_scheduling_at:
+                task = dict(tasks[pending_index])
+                pending_index += 1
+                org = task["organisation_number"]
+                if task["module"] == "website" and not profiles[org].get("website"):
+                    profiles[org].setdefault("evidence", {})["website"] = evidence("website", "not_found", "registry_linked_company_website", "https://data.brreg.no/enhetsregisteret/api/enheter", note="No website candidate in the supplied identity snapshot")
+                    completed_orgs.add(org)
+                    completed_tasks += 1
+                    dirty.add(org)
+                    continue
+                if not task["saved"] and (budget.requests.value >= budget.max_requests or resume_budget_unknown):
+                    skip(task, "resume_budget_unknown" if resume_budget_unknown else "outbound_request_cap")
+                    continue
+                task["profile"] = profiles[org]
+                task["deadline"] = min(stop_scheduling_at, time.monotonic() + company_timeout)
+                task["request_limit"] = 4 if task["module"] == "website" else 2
+                pool.submit(task, company_timeout)
+            if not pool.active:
+                break
+            for task, ok, result in pool.poll(min(0.1, max(0, stop_scheduling_at - time.monotonic()))):
+                org, module = task["organisation_number"], task["module"]
+                if ok:
+                    profiles[org].setdefault("evidence", {}).update(result["records"])
+                    metric = profiles[org]["run_metrics"]
+                    for key in ("bytes", "runtime_ms", "snapshot_reads"):
+                        metric[key] += result["metric"].get(key, 0)
+                    metric["latencies_ms"].extend(result["metric"].get("latencies_ms", []))
+                    completed_orgs.add(org)
+                    completed_tasks += 1
+                else:
+                    url, source_type = (profiles[org].get("website") or "", "registry_linked_company_website") if module == "website" else official_endpoints(org)[module]
+                    profiles[org].setdefault("evidence", {})[module] = evidence(module, "source_error", source_type, url, note=str(result))
+                    errors_by_org.setdefault(org, []).append(_error("company_enrichment_failed", f"{module}: {result}", "pass2"))
                     pass2_errors += 1
-                    latest[org] = _build_envelope(
-                        profiles[org],
-                        run_id=args.run_id,
-                        started_at=started_at,
-                        completed_at=utc_now(),
-                        modules=requested_modules,
-                        errors=errors_by_org[org],
-                        previous=previous_profiles.get(org),
-                        previous_run_id=previous_run_id,
-                    )
+                profiles[org]["run_metrics"]["requests"] = budget.company_requests[task["company_index"]]
+                dirty.add(org)
+            if len(dirty) >= max(1, args.checkpoint_every):
+                for org in dirty:
+                    latest[org] = _build_envelope(profiles[org], run_id=args.run_id, started_at=started_at,
+                        completed_at=utc_now(), modules=requested_modules, errors=errors_by_org.get(org, []),
+                        previous=previous_profiles.get(org), previous_run_id=previous_run_id)
+                    append_progress(journal_path, latest[org], "pass2")
                 write_jsonl(output_path, [latest[item] for item in orgs])
                 write_jsonl(profiles_path, [profiles[item] for item in orgs])
-                append_progress(journal_path, latest[org], "pass2")
-            if pending_index < len(pending) and time.monotonic() >= stop_scheduling_at:
-                break
+                dirty.clear()
     finally:
-        for future in active:
-            future.cancel()
-        executor.shutdown(wait=False, cancel_futures=True)
-
-    if pending_index < len(pending) or active:
-        for profile in pending[pending_index:]:
-            skipped_pass2 += 1
-            org = str(profile["organisation_number"])
-            errors_by_org.setdefault(org, []).append(_error("deadline_pass2_skipped", "Best-effort enrichment was not scheduled before the safety margin.", "deadline"))
-    for future, (org, _submitted) in list(active.items()):
-        # The executor is deliberately not awaited after the deadline. Whether
-        # the underlying request is still running or was cancelled, the output
-        # must explain why the pass-2 replacement was not published.
-        skipped_pass2 += 1
-        code = "deadline_pass2_cancelled" if future.cancelled() else "deadline_pass2_incomplete"
-        errors_by_org.setdefault(org, []).append(_error(code, "Best-effort enrichment was not completed before the deadline.", "deadline"))
+        incomplete = pool.close()
+    for task in incomplete + tasks[pending_index:]:
+        skip(task, "run_deadline")
+    for index, org in enumerate(orgs):
+        profiles[org].setdefault("run_metrics", {})["requests"] = budget.company_requests[index]
 
     completed_at = utc_now()
     final_envelopes = []
@@ -384,7 +421,9 @@ def main() -> None:
         "p50": sorted(company_runtime)[max(0, len(company_runtime) // 2)] if company_runtime else None,
         "p95": sorted(company_runtime)[min(len(company_runtime) - 1, int(len(company_runtime) * 0.95))] if company_runtime else None,
     }
-    operations["third_party_cost_usd"] = 0
+    operations["requests"] = budget.requests.value - initial_requests
+    operations["snapshot_reads"] = sum(profile.get("run_metrics", {}).get("snapshot_reads", 0) for profile in profiles.values())
+    operations["third_party_cost_usd"] = budget.report()["cost_usd"]
     validation = validate_envelopes(final_envelopes, expected_count)
     report = {
         "schema_version": "1.0",
@@ -397,10 +436,15 @@ def main() -> None:
         "company_timeout_seconds": company_timeout,
         "expected_count": expected_count,
         "emitted_envelopes": len(final_envelopes),
+        "status_counts": dict(Counter(envelope["status"] for envelope in final_envelopes)),
+        "section_state_counts": {section: dict(Counter(envelope["sections"][section]["state"] for envelope in final_envelopes))
+                                 for section in final_envelopes[0]["sections"]} if final_envelopes else {},
         "pass1_envelopes": pass1_count,
         "resumed_profiles": len(resumed_orgs),
-        "pass2_completed": completed_pass2,
-        "pass2_skipped": skipped_pass2,
+        "pass2_completed": len(completed_orgs),
+        "pass2_skipped": len(skipped_orgs),
+        "pass2_tasks_completed": completed_tasks,
+        "pass2_tasks_skipped": skipped_tasks,
         "pass2_errors": pass2_errors,
         "modules": requested_modules,
         "registry": {
@@ -409,9 +453,12 @@ def main() -> None:
             "requested": len(orgs),
             "selected": len(found),
             "missing": len(orgs) - len(found),
+            "source_type": next(iter(found.values()), {}).get("evidence", {}).get("registry", {}).get("source_type"),
+            "local_snapshot_uri": bulk_path.resolve().as_uri(),
         },
         "operations": operations,
         "budget": budget.report(),
+        "request_ledger": budget.ledger_path,
         "validation": validation,
         "progress_journal": str(journal_path),
     }

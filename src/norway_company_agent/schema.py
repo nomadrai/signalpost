@@ -184,14 +184,16 @@ def _snapshot(record: dict[str, Any], field: str) -> tuple[dict[str, Any], dict[
         "snapshot_id": snapshot_id,
         "requested_url": str(record.get("source_url") or final_url),
         "final_url": final_url,
-        "http_status": http_status,
+        "http_status": 0 if record.get("local_snapshot_uri") else http_status,
         "redirect_chain": [],
         "retrieved_at": retrieved_at,
         "content_sha256": content_hash,
         "parser_version": "signalpost-contract-v1",
         "source_class": str(record.get("source_class") or record.get("source_type") or "unknown"),
-        "access_policy": "bounded-public-source",
+        "access_policy": "local-snapshot" if record.get("local_snapshot_uri") else "bounded-public-source",
     }
+    if record.get("local_snapshot_uri"):
+        snapshot["local_snapshot_uri"] = record["local_snapshot_uri"]
     locator = {
         "type": "json_path",
         "path": field,
@@ -278,11 +280,11 @@ def _synthesis(profile: dict[str, Any], claims: list[dict[str, Any]], sections: 
             text += f" is registered as {legal_form['value']}."
             ids.append(legal_form["claim_id"])
         else:
-            text += " is registered in the official entity snapshot."
+            text += " appears in the supplied identity snapshot."
         sentences.append({"text": text, "claim_ids": ids})
     employees = by_field.get("identity.employees")
     if employees:
-        sentences.append({"text": f"The registry reports {employees['value']} employees.", "claim_ids": [employees["claim_id"]]})
+        sentences.append({"text": f"The supplied identity snapshot reports {employees['value']} employees.", "claim_ids": [employees["claim_id"]]})
     industry = by_field.get("identity.industry_label")
     if industry:
         sentences.append({"text": f"The registered industry is {industry['value']}.", "claim_ids": [industry["claim_id"]]})
@@ -390,7 +392,7 @@ def build_contract_envelope(
         ("latest_submitted_accounts", profile.get("latest_submitted_accounts")),
     )
     for field, value in identity_fields:
-        _append_claim(profile, claims, snapshots, f"identity.{field}", value, registry, extraction_method="registry_snapshot")
+        _append_claim(profile, claims, snapshots, f"identity.{field}", value, registry, extraction_method="normalized_universe_snapshot" if registry.get("source_type") == "local_company_universe" else "registry_snapshot")
 
     financial_record = evidence.get("financials") or {}
     for index, record in enumerate(((financial_record.get("value") or {}).get("records") or [])[:3]):
@@ -451,6 +453,10 @@ def build_contract_envelope(
         "hiring": {"state": "not_available", "claim_ids": []},
         "activity": {"state": "not_available", "claim_ids": []},
     }
+    for section, record in (("accounts", financial_record), ("leadership", roles_record),
+                            ("workplaces", locations_record), ("website", website_record)):
+        if record.get("note"):
+            sections[section]["reason"] = record["note"]
     identity_state = sections["identity"]["state"]
     status = status_override or ("available" if identity_state == "available" else "failed" if not org else identity_state)
     if status not in AVAILABILITY_STATES:

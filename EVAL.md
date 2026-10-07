@@ -10,6 +10,9 @@ The product reports terminal coverage, exact-entity publication, claim evidence 
 - Run with `RUN_DEADLINE_SECONDS=0` and expect one terminal envelope per valid input with registry pass-1 data where the snapshot contains the row.
 - Run on a 100-row random sample and record equal input/output counts, state counts, field coverage, wrong-company manual review, runtime, requests, bytes, and cost.
 - Run on at least 1,000 rows with a short simulated deadline to verify output continuity without requiring live enrichment to finish.
+- Run `python scripts/check_batch_limits.py --universe <universe.jsonl> --output-dir <runs>/budget-conformance` to verify 1,000 and 1,100 matching identity rows, exact source attribution, absence of fabricated account values, and zero outbound requests.
+- Budget tests use a local HTTP server to count retries, redirects, robots, and concurrent process exhaustion independently of reported metrics. They also kill unreturned work, verify shared monetary reservations, exercise saved responses at zero budget, and force supervisor recovery before identity loading finishes.
+- Export a saved run with `python scripts/summarize_run.py --envelopes <envelopes.jsonl> --report <report.json> --output <summary.json>`. This validates envelope evidence references and reconciles per-company request totals and the reservation ledger.
 
 ## Promotion gate
 

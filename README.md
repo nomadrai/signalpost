@@ -116,7 +116,7 @@ Email the repository URL, run command, models/APIs and expected cost per 100-com
 
 ## Deterministic batch interface
 
-The bounded runner accepts the supplied organisation-number file and a plain or gzip-compressed Brønnøysund CSV snapshot. It writes an atomic JSONL checkpoint as soon as the registry pass is complete, then replaces rows as best-effort enrichment finishes. Every valid input receives one terminal envelope, including when the deadline or a source policy prevents enrichment.
+The bounded runner accepts the supplied organisation-number file and a plain or gzip-compressed Brønnøysund CSV snapshot or normalized company-universe JSONL. It writes an atomic JSONL checkpoint as soon as the identity pass is complete, then replaces rows as best-effort enrichment finishes. Every valid input receives one terminal envelope, including when the deadline or a source policy prevents enrichment. `scripts/run_competition_batch.py` uses this same runner and preserves the starter's `--organisations` interface.
 
 ```bash
 PYTHONPATH=src python scripts/run_batch.py \
@@ -128,7 +128,27 @@ PYTHONPATH=src python scripts/run_batch.py \
   --run-id <run-id>
 ```
 
-The supported terminal states are `available`, `not_available`, `blocked`, `not_applicable`, `ambiguous`, and `failed`. Set `RUN_DEADLINE_SECONDS`, `RUN_DEADLINE_SAFETY_SECONDS`, and `COMPANY_TIMEOUT_SECONDS` in the environment to bound the run. Use `--previous-output` to include source-backed refresh changes. The stable claim/snapshot fields are described in `DATA_SCHEMA.md`.
+The supported terminal states are `available`, `not_available`, `blocked`, `not_applicable`, `ambiguous`, and `failed`. Use `--previous-output` to include source-backed refresh changes. The stable claim/snapshot fields are described in `DATA_SCHEMA.md`.
+
+### Shared limits and local snapshots
+
+- The default wall-clock deadline is **2,700 seconds**, including startup and local processing. `--deadline-seconds` or `RUN_DEADLINE_SECONDS` can lower it. Isolated enrichment workers are killed at their task deadline or the run's safety boundary. A POSIX process-group supervisor bounds shutdown and recovers terminal rows from the last atomic checkpoint if the main runner stalls. Zero selects local-only processing and disables enrichment rather than imposing a zero-time file-writing deadline.
+- The default shared cap is **2,000 outbound HTTP attempts**. `--max-requests` or `MAX_OUTBOUND_REQUESTS` can lower it. Failed requests, retries, redirects, and robots fetches all reserve a slot before transport. The append-only `<output>.budget.jsonl` ledger records reservations before sending. Domain parsing uses the bundled suffix list and performs no hidden suffix-list download.
+- One field family is scheduled across companies before moving to the next: website candidates, accounts, roles, workplaces, live identity, group, and account history. Websites get at most four attempts per task; official modules get at most two, including retries/redirects. Account-history starts retain a shared 2.1-second minimum interval. Unattempted fields have explicit `not_available` states and budget/deadline reasons; an identity-backed result can still be `available`.
+- `--response-snapshot <responses.json>` accepts a saved JSON object with `retrieved_at`, optional `effective_at`, and a `responses` map keyed by official URL. Each value has `status`, and either `body` or `raw_json`. Saved responses are consumed first, retain their source timestamps/hashes, count as `snapshot_reads`, and consume no outbound requests. Missing saved responses may use live HTTP within the cap.
+- Normalized universe JSONL is attributed to its published universe source, its exact supplied byte hash, and its local file identifier. It supports identity and the latest-filing-year flag; it supplies no financial amounts, roles, or subunit responses. Local reads have no fabricated HTTP status.
+- Monetary reservations share one **USD 10 maximum** across search and models. `MAX_COST_USD` defaults to zero, and search/model call limits default to zero. The batch has no enabled paid connector. A monetary allowance alone enables no provider.
+- `--resume` reuses completed modules only when the identity snapshot hash matches, and carries forward the same run's request/cost reservations and elapsed time. If the previous run report is absent, live requests are refused because in-flight usage cannot be reconstructed reliably. Keep the same run ID and report path for a resumed run.
+
+To exercise matching large batches without live requests:
+
+```bash
+python scripts/check_batch_limits.py \
+  --universe <financial-filer-master-2025.jsonl> \
+  --output-dir <runs>/budget-conformance
+```
+
+See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results.
 
 Build the dependency-light static viewer without a server or external assets:
 

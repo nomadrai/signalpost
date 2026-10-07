@@ -1,0 +1,425 @@
+{
+  "run_id": "bounded-live-100",
+  "started_at": "2026-10-07T23:43:03.937512Z",
+  "inputs": 100,
+  "outputs": 100,
+  "status_counts": {
+    "available": 100
+  },
+  "section_states": {
+    "identity": {
+      "available": 100
+    },
+    "accounts": {
+      "available": 99,
+      "not_available": 1
+    },
+    "leadership": {
+      "available": 40,
+      "not_available": 60
+    },
+    "workplaces": {
+      "not_available": 100
+    },
+    "website": {
+      "not_available": 83,
+      "available": 6,
+      "ambiguous": 9,
+      "failed": 1,
+      "blocked": 1
+    },
+    "profiles": {
+      "not_available": 98,
+      "available": 2
+    },
+    "hiring": {
+      "not_available": 100
+    },
+    "activity": {
+      "not_available": 100
+    }
+  },
+  "claims": 2957,
+  "elapsed_seconds": 50.484,
+  "operations": {
+    "requests": 200,
+    "bytes": 8644707,
+    "p50_ms": 921,
+    "p95_ms": 4606,
+    "company_runtime_ms": {
+      "n": 100,
+      "p50": 1735.2910000000002,
+      "p95": 19376.16
+    },
+    "snapshot_reads": 0,
+    "third_party_cost_usd": 0.0
+  },
+  "budget": {
+    "outbound_requests": 200,
+    "max_outbound_requests": 200,
+    "remaining_outbound_requests": 0,
+    "llm_calls": 0,
+    "llm_tokens": 0,
+    "search_calls": 0,
+    "cost_usd": 0.0,
+    "remaining_cost_usd": 0.0
+  },
+  "validation": {
+    "passed": true,
+    "checks": {
+      "exact_expected_count": true,
+      "unique_organisation_numbers": true,
+      "all_entity_states_terminal": true,
+      "all_availability_statuses_valid": true,
+      "all_module_states_terminal": true,
+      "all_claims_have_evidence": true,
+      "zero_silent_drops": true
+    },
+    "invalid_states": [],
+    "evidence_errors": {}
+  },
+  "website_identity_cases": [
+    {
+      "organisation_number": "929336038",
+      "name": "SJØLOFTET AS",
+      "state": "available",
+      "url": "https://www.sjoloftet.no/",
+      "assessment": {
+        "status": "exact",
+        "score": 0.95,
+        "publishable": true,
+        "legal_name_tokens": [
+          "sjoloftet"
+        ],
+        "matched_tokens": [
+          "sjoloftet"
+        ],
+        "reasons": [
+          "single distinctive legal-name token appears in homepage identity evidence with substantive content"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "987796154",
+      "name": "BYGGMESTER ULF JOHANNESSEN AS",
+      "state": "available",
+      "url": "https://www.bmuj.no/",
+      "assessment": {
+        "status": "exact",
+        "score": 0.95,
+        "publishable": true,
+        "legal_name_tokens": [
+          "byggmester",
+          "ulf",
+          "johannessen"
+        ],
+        "matched_tokens": [
+          "byggmester",
+          "johannessen",
+          "ulf"
+        ],
+        "reasons": [
+          "all normalized legal-name tokens appear together in homepage identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "994866028",
+      "name": "HALLINGDAL HOTELLDRIFT AS",
+      "state": "ambiguous",
+      "url": "https://thon.no/",
+      "assessment": {
+        "status": "related_or_uncertain",
+        "score": 0.3,
+        "publishable": false,
+        "legal_name_tokens": [
+          "hallingdal",
+          "hotelldrift"
+        ],
+        "matched_tokens": [],
+        "reasons": [
+          "registry-linked URL lacks strong exact-entity identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "980807568",
+      "name": "STIFTELSEN SKANSEHYTTA ASKIM",
+      "state": "available",
+      "url": "https://www.skansehytta.no/",
+      "assessment": {
+        "status": "exact",
+        "score": 0.95,
+        "publishable": true,
+        "legal_name_tokens": [
+          "skansehytta",
+          "askim"
+        ],
+        "matched_tokens": [
+          "askim",
+          "skansehytta"
+        ],
+        "reasons": [
+          "all normalized legal-name tokens appear together in homepage identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "992932716",
+      "name": "EKBERG LOUS ARKITEKTER AS",
+      "state": "ambiguous",
+      "url": "https://www.ekberglous.com/",
+      "assessment": {
+        "status": "review",
+        "score": 0.85,
+        "publishable": false,
+        "legal_name_tokens": [
+          "ekberg",
+          "lous",
+          "arkitekter"
+        ],
+        "matched_tokens": [
+          "arkitekter",
+          "ekberg",
+          "lous"
+        ],
+        "reasons": [
+          "most legal-name tokens appear, but exact identity is incomplete"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "912362086",
+      "name": "VITAGILE AS",
+      "state": "available",
+      "url": "https://www.vitagile.no/",
+      "assessment": {
+        "status": "exact",
+        "score": 0.95,
+        "publishable": true,
+        "legal_name_tokens": [
+          "vitagile"
+        ],
+        "matched_tokens": [
+          "vitagile"
+        ],
+        "reasons": [
+          "single distinctive legal-name token appears in homepage identity evidence with substantive content"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "875606662",
+      "name": "KONGSVINGER IL ISHOCKEY",
+      "state": "ambiguous",
+      "url": "https://kilishockey.no/",
+      "assessment": {
+        "status": "related_or_uncertain",
+        "score": 0.3,
+        "publishable": false,
+        "legal_name_tokens": [
+          "kongsvinger",
+          "il",
+          "ishockey"
+        ],
+        "matched_tokens": [
+          "ishockey"
+        ],
+        "reasons": [
+          "registry-linked URL lacks strong exact-entity identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "983104975",
+      "name": "NYE ILALØKKEN SAMEIE",
+      "state": "ambiguous",
+      "url": "https://www.obf.no/",
+      "assessment": {
+        "status": "related_or_uncertain",
+        "score": 0.3,
+        "publishable": false,
+        "legal_name_tokens": [
+          "nye",
+          "ilalokken",
+          "sameie"
+        ],
+        "matched_tokens": [],
+        "reasons": [
+          "registry-linked URL lacks strong exact-entity identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "927288427",
+      "name": "BODIVA AS",
+      "state": "ambiguous",
+      "url": "https://autorisertlandmaler.no/",
+      "assessment": {
+        "status": "related_or_uncertain",
+        "score": 0.3,
+        "publishable": false,
+        "legal_name_tokens": [
+          "bodiva"
+        ],
+        "matched_tokens": [],
+        "reasons": [
+          "registry-linked URL lacks strong exact-entity identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "975387011",
+      "name": "STIFTELSEN CRUX",
+      "state": "ambiguous",
+      "url": "https://stiftelsencrux.no/",
+      "assessment": {
+        "status": "related_or_uncertain",
+        "score": 0.3,
+        "publishable": false,
+        "legal_name_tokens": [
+          "crux"
+        ],
+        "matched_tokens": [
+          "crux"
+        ],
+        "reasons": [
+          "registry-linked URL lacks strong exact-entity identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "965558268",
+      "name": "HAKO ELEKTRO AS",
+      "state": "available",
+      "url": "https://www.hako-elektro.no/",
+      "assessment": {
+        "status": "exact",
+        "score": 0.95,
+        "publishable": true,
+        "legal_name_tokens": [
+          "hako",
+          "elektro"
+        ],
+        "matched_tokens": [
+          "elektro",
+          "hako"
+        ],
+        "reasons": [
+          "all normalized legal-name tokens appear together in homepage identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "920186114",
+      "name": "JOHAN EDVARD DEVOLD MØLLERS STIFTELSE",
+      "state": "failed",
+      "url": "https://jedevold-moller.no/",
+      "assessment": null
+    },
+    {
+      "organisation_number": "951841242",
+      "name": "BORETTSLAGET TJENSVOLD I",
+      "state": "ambiguous",
+      "url": "https://bate.no/",
+      "assessment": {
+        "status": "related_or_uncertain",
+        "score": 0.3,
+        "publishable": false,
+        "legal_name_tokens": [
+          "borettslaget",
+          "tjensvold"
+        ],
+        "matched_tokens": [],
+        "reasons": [
+          "registry-linked URL lacks strong exact-entity identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "925805645",
+      "name": "ROYAL SUBSEA AS",
+      "state": "blocked",
+      "url": "https://www.royalis.no/",
+      "assessment": null
+    },
+    {
+      "organisation_number": "919378875",
+      "name": "GRØNSAND GJESTEGÅRD AS",
+      "state": "available",
+      "url": "https://www.gronsand.no/",
+      "assessment": {
+        "status": "exact",
+        "score": 0.95,
+        "publishable": true,
+        "legal_name_tokens": [
+          "gronsand",
+          "gjestegard"
+        ],
+        "matched_tokens": [
+          "gjestegard",
+          "gronsand"
+        ],
+        "reasons": [
+          "all normalized legal-name tokens appear together in homepage identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "891704682",
+      "name": "KLP SCHWEIGAARDSGATE 21 AS",
+      "state": "ambiguous",
+      "url": "https://www.klpeiendom.no/oslo",
+      "assessment": {
+        "status": "related_or_uncertain",
+        "score": 0.3,
+        "publishable": false,
+        "legal_name_tokens": [
+          "klp",
+          "schweigaardsgate",
+          "21"
+        ],
+        "matched_tokens": [
+          "klp"
+        ],
+        "reasons": [
+          "registry-linked URL lacks strong exact-entity identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    },
+    {
+      "organisation_number": "985266840",
+      "name": "NANNA AS",
+      "state": "ambiguous",
+      "url": "https://www.kimanwoman.no/",
+      "assessment": {
+        "status": "related_or_uncertain",
+        "score": 0.3,
+        "publishable": false,
+        "legal_name_tokens": [
+          "nanna"
+        ],
+        "matched_tokens": [],
+        "reasons": [
+          "registry-linked URL lacks strong exact-entity identity evidence"
+        ],
+        "method": "deterministic_name_org_evidence_v2"
+      }
+    }
+  ],
+  "manual_identity_review": "not performed for this run"
+}

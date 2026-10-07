@@ -171,6 +171,8 @@ def normalize_entity(body: Any) -> dict[str, Any]:
 
 
 def _classified(field: str, source_type: str, result: FetchResult, value: Any = None) -> dict[str, Any]:
+    if result.budget_exhausted:
+        return evidence(field, "not_fetched", source_type, result.url, note=result.error, retrieved_at=result.retrieved_at)
     if result.status == 200:
         return evidence(field, "available", source_type, result.url, value=result.body if value is None else value, content_sha256=result.content_sha256, retrieved_at=result.retrieved_at, effective_at=result.effective_at)
     if result.status in {404, 410}:
@@ -178,10 +180,8 @@ def _classified(field: str, source_type: str, result: FetchResult, value: Any = 
     return evidence(field, "source_error", source_type, result.url, note=result.error, content_sha256=result.content_sha256, retrieved_at=result.retrieved_at, effective_at=result.effective_at)
 
 
-def fetch_official_modules(org: str, modules: set[str], fetcher: Callable[[str], FetchResult] = fetch_json) -> tuple[dict[str, Any], list[FetchResult]]:
-    records: dict[str, Any] = {}
-    metrics: list[FetchResult] = []
-    endpoints = {
+def official_endpoints(org: str) -> dict[str, tuple[str, str]]:
+    return {
         "registry_live": (BRREG_ENTITY.format(org=org), "official_registry_live"),
         "financials": (BRREG_ACCOUNTS.format(org=org), "official_annual_accounts"),
         "financial_history": (BRREG_ACCOUNT_YEARS.format(org=org), "official_annual_account_copies"),
@@ -189,7 +189,12 @@ def fetch_official_modules(org: str, modules: set[str], fetcher: Callable[[str],
         "group": (BRREG_GROUP.format(org=org), "official_group_structure"),
         "locations": (BRREG_SUBUNITS.format(org=org), "official_subunits"),
     }
-    for module, (url, source_type) in endpoints.items():
+
+
+def fetch_official_modules(org: str, modules: set[str], fetcher: Callable[[str], FetchResult] = fetch_json) -> tuple[dict[str, Any], list[FetchResult]]:
+    records: dict[str, Any] = {}
+    metrics: list[FetchResult] = []
+    for module, (url, source_type) in official_endpoints(org).items():
         if module not in modules:
             continue
         result = _fetch_history(url) if module == "financial_history" and fetcher is fetch_json else fetcher(url)

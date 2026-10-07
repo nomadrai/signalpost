@@ -8,3 +8,6 @@
 - Browser rendering, OCR, heavy language models, and third-party search are optional. The deterministic registry pass continues when these components are absent or their budgets are zero.
 - There is no promise that every Norwegian entity has annual accounts, a website, a public role holder, a workplace, a job, or dated activity. Unknown is a valid product result.
 - The current identity baseline still includes a legacy legal-name path for starter compatibility. Exact organisation-number evidence is preferred, and stronger independent corroboration is needed before broadening publication.
+- The bounded runner currently requires POSIX process groups and interval timers. It is verified on Linux. The final supervisor guard exits with code 124 if checkpoint recovery itself stalls; the last atomic checkpoint remains intact.
+- The 1,000/1,100-company checks use matching normalized identity rows with no live requests. The capped live check covers 100 companies. Full-size live coverage under 2,000 attempts has not yet been measured, and depends on which official response snapshots are supplied.
+- Killing a stalled task can lose its unreturned response body, but cannot mutate a published parent profile or erase its reserved request count. Byte/latency metrics include returned results; request accounting includes reserved in-flight attempts.

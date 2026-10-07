@@ -18,6 +18,8 @@ import tldextract
 import trafilatura
 
 from .evidence import evidence
+from .budget import BudgetExceeded, bounded_timeout
+from .http import BudgetRequestHandler
 
 USER_AGENT = "builderr-signalpost-poc/0.1 (+https://builderr.ai)"
 SOCIAL_HOSTS = {
@@ -60,7 +62,8 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-SAFE_OPENER = urllib.request.build_opener(SafeRedirectHandler())
+SAFE_OPENER = urllib.request.build_opener(SafeRedirectHandler(), BudgetRequestHandler())
+DOMAIN_EXTRACTOR = tldextract.TLDExtract(suffix_list_urls=())
 
 
 def normalize_homepage(value: str | None) -> str | None:
@@ -77,7 +80,7 @@ def normalize_homepage(value: str | None) -> str | None:
 
 def _registered_domain(url: str) -> str:
     parsed = urllib.parse.urlparse(url)
-    ext = tldextract.extract(parsed.hostname or "")
+    ext = DOMAIN_EXTRACTOR(parsed.hostname or "")
     return ext.top_domain_under_public_suffix
 
 
@@ -89,9 +92,11 @@ def _robots_allowed(url: str, timeout: float) -> bool:
     parser.set_url(robots_url)
     try:
         request = urllib.request.Request(robots_url, headers={"User-Agent": USER_AGENT})
-        with SAFE_OPENER.open(request, timeout=timeout) as response:
+        with SAFE_OPENER.open(request, timeout=bounded_timeout(timeout)) as response:
             parser.parse(response.read().decode("utf-8", errors="replace").splitlines())
         return parser.can_fetch(USER_AGENT, url)
+    except BudgetExceeded:
+        raise
     except Exception:
         # An unavailable robots file is not permission to ignore explicit site terms; callers retain
         # the URL and can route uncertain domains to review. For this bounded homepage POC, allow one
@@ -207,12 +212,15 @@ def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 4) -> list[
 
 
 def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max_bytes: int) -> tuple[dict[str, Any] | None, list[dict[str, str]], int, int, int, str | None]:
-    if not _robots_allowed(url, timeout):
-        return None, [], 1, 0, 0, "robots.txt disallows page"
+    try:
+        if not _robots_allowed(url, timeout):
+            return None, [], 1, 0, 0, "robots.txt disallows page"
+    except BudgetExceeded as exc:
+        return None, [], 0, 0, 0, str(exc)
     started = time.monotonic()
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
     try:
-        with SAFE_OPENER.open(request, timeout=timeout) as response:
+        with SAFE_OPENER.open(request, timeout=bounded_timeout(timeout)) as response:
             raw = response.read(max_bytes + 1)
             elapsed = int((time.monotonic() - started) * 1000)
             final_url = response.geturl()
@@ -267,12 +275,15 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
         assert_public_url(normalized)
     except ValueError as exc:
         return evidence("website", "blocked", "registry_linked_company_website", normalized, note=str(exc)), {"requests": 0, "bytes": 0, "latencies_ms": []}
-    if not _robots_allowed(normalized, timeout):
-        return evidence("website", "blocked", "registry_linked_company_website", normalized, note="robots.txt disallows this user agent"), {"requests": 1, "bytes": 0, "latencies_ms": []}
+    try:
+        if not _robots_allowed(normalized, timeout):
+            return evidence("website", "blocked", "registry_linked_company_website", normalized, note="robots.txt disallows this user agent"), {"requests": 1, "bytes": 0, "latencies_ms": []}
+    except BudgetExceeded as exc:
+        return evidence("website", "not_fetched", "registry_linked_company_website", normalized, note=str(exc)), {"requests": 0, "bytes": 0, "latencies_ms": []}
     started = time.monotonic()
     request = urllib.request.Request(normalized, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
     try:
-        with SAFE_OPENER.open(request, timeout=timeout) as response:
+        with SAFE_OPENER.open(request, timeout=bounded_timeout(timeout)) as response:
             content_type = response.headers.get("content-type", "")
             raw = response.read(max_bytes + 1)
             elapsed = int((time.monotonic() - started) * 1000)
@@ -328,6 +339,8 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
         value["social_links"] = list({(item["platform"], item["url"]): item for item in social}.values())
         value["crawl_errors"] = crawl_errors
         return evidence("website", "available", "registry_linked_company_website", final_url, value=value, note="Company-controlled claim layer; not an official registry fact", content_sha256=value["content_sha256"]), {"requests": requests, "bytes": bytes_received, "latencies_ms": page_latencies}
+    except BudgetExceeded as exc:
+        return evidence("website", "not_fetched", "registry_linked_company_website", normalized, note=str(exc)), {"requests": 0, "bytes": 0, "latencies_ms": []}
     except urllib.error.HTTPError as exc:
         elapsed = int((time.monotonic() - started) * 1000)
         status = "not_found" if exc.code in {404, 410} else "source_error"

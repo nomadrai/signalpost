@@ -9,6 +9,21 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from .budget import BudgetExceeded, bounded_sleep, bounded_timeout, reserve_http_attempt
+
+
+class BudgetRequestHandler(urllib.request.BaseHandler):
+    """urllib runs request processors again for every redirected HTTP attempt."""
+
+    def http_request(self, request):
+        reserve_http_attempt(request.full_url)
+        return request
+
+    https_request = http_request
+
+
+COUNTED_OPENER = urllib.request.build_opener(BudgetRequestHandler())
+
 
 @dataclass
 class FetchResult:
@@ -21,6 +36,7 @@ class FetchResult:
     content_sha256: str | None = None
     retrieved_at: str | None = None
     effective_at: str | None = None
+    budget_exhausted: bool = False
 
 
 def _utc_now() -> str:
@@ -36,10 +52,12 @@ def fetch_json(url: str, *, timeout: float = 20.0, attempts: int = 3) -> FetchRe
             headers={"Accept": "application/json", "User-Agent": "builderr-signalpost-poc/0.1 (+https://builderr.ai)"},
         )
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with COUNTED_OPENER.open(request, timeout=bounded_timeout(timeout)) as response:
                 raw = response.read()
                 elapsed = int((time.monotonic() - started) * 1000)
                 return FetchResult(url, response.status, elapsed, len(raw), json.loads(raw), content_sha256=hashlib.sha256(raw).hexdigest(), retrieved_at=_utc_now())
+        except BudgetExceeded as exc:
+            return FetchResult(url, 0, 0, 0, error=str(exc), retrieved_at=_utc_now(), budget_exhausted=True)
         except urllib.error.HTTPError as exc:
             elapsed = int((time.monotonic() - started) * 1000)
             raw = exc.read()
@@ -49,5 +67,8 @@ def fetch_json(url: str, *, timeout: float = 20.0, attempts: int = 3) -> FetchRe
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             last_error = type(exc).__name__
         if attempt + 1 < attempts:
-            time.sleep(0.4 * (2**attempt))
+            try:
+                bounded_sleep(0.4 * (2**attempt))
+            except BudgetExceeded as exc:
+                return FetchResult(url, 0, 0, 0, error=str(exc), retrieved_at=_utc_now(), budget_exhausted=True)
     return FetchResult(url, 0, 0, 0, error=last_error, retrieved_at=_utc_now())

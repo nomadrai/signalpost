@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import gzip
 import hashlib
 import random
@@ -143,7 +144,7 @@ def deterministic_financial_filer_sample(
 
 
 def iter_bulk(path: str | Path) -> Iterable[dict[str, Any]]:
-    """Iterate either a plain or gzip-compressed Brreg CSV snapshot.
+    """Iterate plain/gzip registry CSV or normalized company-universe JSONL.
 
     The README names the download as CSV while some mirrors return a gzip file.
     Detecting the bytes keeps both documented forms deterministic and avoids a
@@ -158,6 +159,22 @@ def iter_bulk(path: str | Path) -> Iterable[dict[str, Any]]:
     with context as handle:
         sample = handle.read(8192)
         handle.seek(0)
+        if sample.lstrip().startswith("{"):
+            fields = ("organisation_number", "name", "legal_form", "employees", "bankrupt",
+                      "liquidating", "municipality", "municipality_number", "industry_code",
+                      "industry_label", "website", "latest_submitted_accounts")
+            for line_number, line in enumerate(handle, 1):
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                if not isinstance(row, dict) or "organisation_number" not in row:
+                    raise ValueError(f"Invalid normalized universe row at line {line_number}")
+                record = {key: row.get(key) for key in fields}
+                record["organisation_number"] = str(record["organisation_number"])
+                record["raw"] = row
+                record["snapshot_source_type"] = "local_company_universe"
+                yield record
+            return
         try:
             dialect = csv.Sniffer().sniff(sample, delimiters=";,\t")
         except csv.Error:
@@ -166,6 +183,11 @@ def iter_bulk(path: str | Path) -> Iterable[dict[str, Any]]:
             record = normalize_row(row)
             if len(record["organisation_number"]) == 9:
                 yield record
+
+
+def snapshot_sha256(path: str | Path) -> str:
+    with Path(path).open("rb") as handle:
+        return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def deterministic_sample(path: str | Path, count: int, seed: int = 20260822) -> tuple[list[dict[str, Any]], dict[str, Any]]:

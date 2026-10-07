@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from .evidence import evidence, utc_now
 from .official import accounting_obligation_assessment
-from .sampling import iter_bulk
+from .sampling import iter_bulk, snapshot_sha256 as hash_snapshot
 from .schema import AVAILABILITY_STATES, build_contract_envelope, validate_claim_evidence
 
 
@@ -69,16 +69,20 @@ def read_organisation_numbers(path: str | Path) -> list[str]:
     return [record["organisation_number"] for record in read_organisation_inputs(path)]
 
 
-def profile_from_bulk_record(profile: dict[str, Any], *, snapshot_sha256: str, retrieved_at: str | None = None) -> dict[str, Any]:
+def profile_from_bulk_record(profile: dict[str, Any], *, snapshot_sha256: str, retrieved_at: str | None = None, snapshot_uri: str | None = None) -> dict[str, Any]:
     """Attach immutable registry evidence to one normalized bulk row."""
     normalized = dict(profile)
     raw = normalized.pop("raw", {})
+    source_type = normalized.pop("snapshot_source_type", "official_registry_bulk")
+    source_url = ("https://builderr.ai/signalpost-company-universe-2025.jsonl.gz"
+                  if source_type == "local_company_universe"
+                  else "https://data.brreg.no/enhetsregisteret/api/enheter/lastned/csv")
     normalized["evidence"] = {
         "registry": evidence(
             "registry",
             "available",
-            "official_registry_bulk",
-            "https://data.brreg.no/enhetsregisteret/api/enheter/lastned/csv",
+            source_type,
+            source_url,
             value=raw,
             retrieved_at=retrieved_at or utc_now(),
             content_sha256=snapshot_sha256,
@@ -86,13 +90,14 @@ def profile_from_bulk_record(profile: dict[str, Any], *, snapshot_sha256: str, r
         ),
         "accounting_obligation": accounting_obligation_assessment(normalized),
     }
+    normalized["evidence"]["registry"]["local_snapshot_uri"] = snapshot_uri
     return normalized
 
 
 def profiles_from_bulk(path: str | Path, organisation_numbers: Iterable[str]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     requested = list(organisation_numbers)
     wanted = set(requested)
-    snapshot_sha256 = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    snapshot_sha256 = hash_snapshot(path)
     retrieved_at = utc_now()
     found: dict[str, dict[str, Any]] = {}
     scanned = 0
@@ -101,7 +106,7 @@ def profiles_from_bulk(path: str | Path, organisation_numbers: Iterable[str]) ->
         org = profile["organisation_number"]
         if org not in wanted:
             continue
-        found[org] = profile_from_bulk_record(profile, snapshot_sha256=snapshot_sha256, retrieved_at=retrieved_at)
+        found[org] = profile_from_bulk_record(profile, snapshot_sha256=snapshot_sha256, retrieved_at=retrieved_at, snapshot_uri=Path(path).resolve().as_uri())
         if len(found) == len(wanted):
             break
     missing = [org for org in requested if org not in found]
@@ -130,6 +135,8 @@ def evidence_terminal_state(record: dict[str, Any] | None) -> str:
         return "blocked_robots" if "robot" in note else "blocked_policy"
     if status == "source_error":
         return "source_error"
+    if status == "not_fetched" and (record or {}).get("note"):
+        return "budget_exhausted"
     return "submission_error"
 
 
