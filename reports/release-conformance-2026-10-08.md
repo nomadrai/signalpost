@@ -28,11 +28,17 @@ preserves Unicode line separators inside captured page text.
 | Static viewer | Built 1,004 files for 1,000 profiles; structural HTML checks passed |
 | Deadline regression | Passed after including implementation import time and tightening worker reaping |
 | JSONL Unicode regression | Passed in evidence validation and supervisor recovery; physical LF records remain valid when captured text contains U+2028 |
+| Saved-response scalability | Synthetic 1,000-company map: 1,000 snapshot reads, 0 requests, validation passed; resume: 0 duplicate reads |
 
 The reproducible large-run artifacts are under the temporary verification
 directory used for this check and are not product data. The committed public
 coverage reports remain `bounded-smoke-100.md` and
 `coverage-follow-up-100.md`.
+
+The saved-response scalability check used a temporary synthetic response map
+solely to exercise the supplied-response interface at 1,000 companies. Its
+financial values are test fixtures, not official observations, and are not
+included as coverage or evidence claims in the product reports.
 
 ## Website identity evidence review
 
