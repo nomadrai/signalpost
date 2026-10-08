@@ -17,6 +17,8 @@ class BudgetRequestHandler(urllib.request.BaseHandler):
 
     def http_request(self, request):
         reserve_http_attempt(request.full_url)
+        if hasattr(request, "attempt_counter"):
+            request.attempt_counter["requests"] += 1
         return request
 
     https_request = http_request

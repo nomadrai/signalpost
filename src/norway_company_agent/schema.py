@@ -419,6 +419,19 @@ def build_contract_envelope(
     for location in ((locations_record.get("value") or {}).get("locations") or []):
         _append_claim(profile, claims, snapshots, "workplaces.location", location, locations_record, extraction_method="official_subunit_record")
 
+    for family, prefix in (("hiring", "hiring.item"), ("activity", "activity.item")):
+        signal_record = evidence.get(family) or {}
+        for item in ((signal_record.get("value") or {}).get("items") or []):
+            fact = item.get("value") if isinstance(item, dict) else item
+            if not isinstance(fact, dict):
+                continue
+            claim_record = {**signal_record, "source_url": item.get("page_url") or signal_record.get("source_url"),
+                            "content_sha256": item.get("page_sha256") or signal_record.get("content_sha256")}
+            _append_claim(profile, claims, snapshots, prefix, fact, claim_record,
+                          extraction_method=str(item.get("method") or "company_page_structured_data"),
+                          identity_tier="A", confidence=1.0,
+                          effective_date=fact.get("date_posted") or fact.get("date"))
+
     website_record = evidence.get("website") or {}
     website_value = website_record.get("value") or {}
     website_identity = website_value.get("identity_assessment") or {}
@@ -450,11 +463,12 @@ def build_contract_envelope(
         "workplaces": {"state": _section_state(locations_record, _module_claim_ids(claims, "workplaces."), "workplaces."), "claim_ids": _module_claim_ids(claims, "workplaces.")},
         "website": {"state": "available" if website_publishable else "ambiguous" if website_record.get("status") == "available" else _record_state(website_record), "claim_ids": _module_claim_ids(claims, "website.")},
         "profiles": {"state": "available" if _module_claim_ids(claims, "profiles.") else "not_available", "claim_ids": _module_claim_ids(claims, "profiles.")},
-        "hiring": {"state": "not_available", "claim_ids": []},
-        "activity": {"state": "not_available", "claim_ids": []},
+        "hiring": {"state": _section_state(evidence.get("hiring"), _module_claim_ids(claims, "hiring."), "hiring."), "claim_ids": _module_claim_ids(claims, "hiring.")},
+        "activity": {"state": _section_state(evidence.get("activity"), _module_claim_ids(claims, "activity."), "activity."), "claim_ids": _module_claim_ids(claims, "activity.")},
     }
     for section, record in (("accounts", financial_record), ("leadership", roles_record),
-                            ("workplaces", locations_record), ("website", website_record)):
+                            ("workplaces", locations_record), ("website", website_record),
+                            ("hiring", evidence.get("hiring") or {}), ("activity", evidence.get("activity") or {})):
         if record.get("note"):
             sections[section]["reason"] = record["note"]
     identity_state = sections["identity"]["state"]

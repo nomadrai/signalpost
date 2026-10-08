@@ -824,6 +824,7 @@ class WebsiteTests(unittest.TestCase):
         profile = {
             "organisation_number": "985628572",
             "name": "NETSOLUTION VIKEN AS",
+            "business_address": {"adresse": ["Kobbervikdalen 75 A"], "postnummer": "3036", "poststed": "Drammen"},
             "evidence": {"website": website},
         }
         self.assertIn("Netsolution Viken AS", website["value"]["identity_text_excerpt"])
@@ -1253,9 +1254,17 @@ class WebsiteIdentityTests(unittest.TestCase):
         self.assertEqual(result["website"]["value"]["social_links"], [])
         self.assertEqual(result["quarantined_social_links"], 1)
 
-    def test_exact_legal_name_is_publishable(self):
+    def test_exact_legal_name_without_independent_proof_is_quarantined(self):
         row = {"organisation_number": "923609016", "name": "Norsk Fiskeeksport AS", "evidence": {"website": {"status": "available", "value": {"title": "Norsk Fiskeeksport AS"}}}}
-        self.assertTrue(assess_website_identity(row)["publishable"])
+        self.assertFalse(assess_website_identity(row)["publishable"])
+
+    def test_exact_legal_name_with_registered_address_is_publishable(self):
+        row = {"organisation_number": "923609016", "name": "Norsk Fiskeeksport AS",
+               "business_address": {"adresse": ["Havnegata 12"], "postnummer": "6001", "poststed": "Ålesund"},
+               "evidence": {"website": {"status": "available", "value": {"title": "Norsk Fiskeeksport AS", "identity_text_excerpt": "Norsk Fiskeeksport AS Havnegata 12 6001 Ålesund"}}}}
+        assessment = assess_website_identity(row)
+        self.assertTrue(assessment["publishable"])
+        self.assertIn("registered_street_and_postcode_or_city", assessment["proofs"])
 
     def test_parent_brand_without_legal_name_is_quarantined(self):
         row = {"organisation_number": "988412406", "name": "Tevlingveien 23 Invest AS", "evidence": {"website": {"status": "available", "value": {"title": "Ragde Eiendom"}}}}

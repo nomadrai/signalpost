@@ -6,14 +6,31 @@ import urllib.parse
 from typing import Any
 
 from .website import normalize_homepage
+from .identity import BLOCKED_WEBSITE_HOSTS, company_host_allowed
 
 
-BLOCKED_DISCOVERY_HOSTS = {
-    "proff.no", "purehelp.no", "1881.no", "gulesider.no", "firmalisten.no", "companywall.no",
-    "firmadatabasen.no", "sokfirma.no", "yra.no", "northdata.com", "nor47business.com",
-    "linkedin.com", "facebook.com", "instagram.com", "x.com", "twitter.com", "youtube.com", "tiktok.com",
-}
+BLOCKED_DISCOVERY_HOSTS = BLOCKED_WEBSITE_HOSTS
 GENERIC_NAME_TOKENS = {"as", "asa", "ans", "da", "enk", "sa", "nuf", "company", "norge", "norway", "gruppen", "group"}
+
+
+def website_candidates(profile: dict[str, Any], *, derived: bool = False) -> list[dict[str, str]]:
+    """A bounded plan, never a publication decision or a financial-data source."""
+    candidates = []
+    live = profile.get("evidence", {}).get("registry_live", {}).get("value") or {}
+    for value, source in ((profile.get("website"), "registry_snapshot"), (live.get("website"), "registry_live")):
+        normalized = normalize_homepage(value)
+        if normalized and company_host_allowed(normalized):
+            candidates.append({"url": normalized, "source": source})
+    if derived:
+        tokens = [token for token in _tokens(profile.get("name")) if token not in GENERIC_NAME_TOKENS]
+        unsuitable = {"holding", "invest", "investering", "eiendom", "borettslaget", "borettslag", "sameie", "enk"}
+        if (1 <= len(tokens) <= 3 and 4 <= len("".join(tokens)) <= 40 and
+            not set(tokens) & unsuitable and not any(token.isdigit() for token in tokens) and
+            profile.get("legal_form") != "ENK"):
+            for suffix in ("no", "com"):
+                candidates.append({"url": f"https://{''.join(tokens)}.{suffix}/", "source": "legal_name_domain"})
+    unique = {item["url"]: item for item in reversed(candidates)}
+    return list(reversed(list(unique.values())))[:3]
 
 
 def build_company_search_query(profile: dict[str, Any]) -> str:

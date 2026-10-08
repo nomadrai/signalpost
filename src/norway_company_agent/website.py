@@ -20,6 +20,8 @@ import trafilatura
 from .evidence import evidence
 from .budget import BudgetExceeded, bounded_timeout
 from .http import BudgetRequestHandler
+from .identity import assess_website_identity, company_host_allowed
+from .page_capture import capture_page
 
 USER_AGENT = "builderr-signalpost-poc/0.1 (+https://builderr.ai)"
 SOCIAL_HOSTS = {
@@ -36,6 +38,7 @@ PRIORITY_TERMS = (
     "om-oss", "om_oss", "about", "kontakt", "contact", "ledelse", "management",
     "team", "people", "locations", "lokasjoner", "avdelinger", "butikker",
     "news", "press", "aktuelt", "nyheter",
+    "karriere", "career", "jobs", "jobb", "stillinger", "vacancies", "ledige",
 )
 
 
@@ -59,7 +62,15 @@ def assert_public_url(url: str) -> None:
 class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Any:
         assert_public_url(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None:
+            chain = getattr(req, "redirect_chain", [])
+            req.redirect_chain = chain
+            chain.append({"from": req.full_url, "to": newurl, "status": code})
+            redirected.redirect_chain = chain
+            if hasattr(req, "attempt_counter"):
+                redirected.attempt_counter = req.attempt_counter
+        return redirected
 
 
 SAFE_OPENER = urllib.request.build_opener(SafeRedirectHandler(), BudgetRequestHandler())
@@ -84,23 +95,42 @@ def _registered_domain(url: str) -> str:
     return ext.top_domain_under_public_suffix
 
 
-def _robots_allowed(url: str, timeout: float) -> bool:
+def _robots_allowed(url: str, timeout: float, cache: dict | None = None) -> bool:
     assert_public_url(url)
     parsed = urllib.parse.urlparse(url)
     robots_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, "/robots.txt", "", "", ""))
+    if cache is not None and robots_url in cache:
+        cached = cache[robots_url]
+        return cached.can_fetch(USER_AGENT, url) if isinstance(cached, urllib.robotparser.RobotFileParser) else bool(cached)
     parser = urllib.robotparser.RobotFileParser()
     parser.set_url(robots_url)
     try:
         request = urllib.request.Request(robots_url, headers={"User-Agent": USER_AGENT})
+        if cache is not None and "_attempts" in cache:
+            request.attempt_counter = cache["_attempts"]
         with SAFE_OPENER.open(request, timeout=bounded_timeout(timeout)) as response:
-            parser.parse(response.read().decode("utf-8", errors="replace").splitlines())
+            raw = response.read(512_001)
+            if len(raw) > 512_000:
+                if cache is not None:
+                    cache[robots_url] = False
+                return False
+            parser.parse(raw.decode("utf-8", errors="replace").splitlines())
+        if cache is not None:
+            cache[robots_url] = parser
         return parser.can_fetch(USER_AGENT, url)
     except BudgetExceeded:
         raise
+    except urllib.error.HTTPError as exc:
+        allowed = exc.code in {404, 410}
+        if cache is not None:
+            cache[robots_url] = allowed
+        return allowed
     except Exception:
         # An unavailable robots file is not permission to ignore explicit site terms; callers retain
         # the URL and can route uncertain domains to review. For this bounded homepage POC, allow one
         # ordinary GET when robots.txt is absent rather than crawl deeper.
+        if cache is not None:
+            cache[robots_url] = False
         return True
 
 
@@ -191,7 +221,7 @@ def normalize_social_url(url: str) -> dict[str, str] | None:
     return {"platform": platform, "url": f"https://{canonical_host}/{'/'.join(parts)}"}
 
 
-def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 4) -> list[str]:
+def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 4, *, identity_needed: bool = True) -> list[str]:
     base = urllib.parse.urlparse(base_url)
     candidates: dict[str, int] = {}
     for anchor in soup.select("a[href]"):
@@ -201,7 +231,12 @@ def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 4) -> list[
         if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != base.netloc.lower():
             continue
         haystack = (parsed.path + " " + anchor.get_text(" ", strip=True)).casefold()
-        rank = next((index for index, term in enumerate(PRIORITY_TERMS) if term in haystack), None)
+        groups = (("kontakt", "contact", "om-oss", "about"), ("stillinger", "ledige", "karriere", "career", "jobs", "jobb", "vacancies"), ("news", "press", "aktuelt", "nyheter"))
+        if not identity_needed:
+            groups = groups[1:] + groups[:1]
+        rank = next((index for index, terms in enumerate(groups) if any(term in haystack for term in terms)), None)
+        if rank is None and any(term in haystack for term in PRIORITY_TERMS):
+            rank = 3
         if rank is None:
             continue
         clean = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path or "/", "", "", ""))
@@ -211,14 +246,16 @@ def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 4) -> list[
     return [url for url, _ in sorted(candidates.items(), key=lambda item: (item[1], item[0]))[:limit]]
 
 
-def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max_bytes: int) -> tuple[dict[str, Any] | None, list[dict[str, str]], int, int, int, str | None]:
+def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max_bytes: int, robots_cache: dict | None = None) -> tuple[dict[str, Any] | None, list[dict[str, str]], int, int, int, str | None]:
     try:
-        if not _robots_allowed(url, timeout):
+        if not _robots_allowed(url, timeout, robots_cache):
             return None, [], 1, 0, 0, "robots.txt disallows page"
     except BudgetExceeded as exc:
         return None, [], 0, 0, 0, str(exc)
     started = time.monotonic()
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
+    if robots_cache is not None and "_attempts" in robots_cache:
+        request.attempt_counter = robots_cache["_attempts"]
     try:
         with SAFE_OPENER.open(request, timeout=bounded_timeout(timeout)) as response:
             raw = response.read(max_bytes + 1)
@@ -231,12 +268,9 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
         page_html = raw.decode("utf-8", errors="replace")
         page_soup = BeautifulSoup(page_html, "lxml")
         page_text = trafilatura.extract(page_html, url=final_url, include_links=False, include_tables=False, favor_precision=True) or ""
-        page = {
-            "url": final_url,
-            "title": page_soup.title.get_text(" ", strip=True)[:500] if page_soup.title else "",
-            "main_text_excerpt": page_text[:5000],
-            "content_sha256": __import__("hashlib").sha256(raw).hexdigest(),
-        }
+        page = capture_page(raw, requested_url=url, final_url=final_url, redirect_chain=getattr(request, "redirect_chain", []))
+        page["main_text_excerpt"] = page_text[:5000]
+        page["priority_links"] = _priority_links(final_url, page_soup, identity_needed=False)
         return page, _social_links(final_url, page_soup), 2, len(raw), elapsed, None
     except Exception as exc:
         return None, [], 2, 0, int((time.monotonic() - started) * 1000), f"{type(exc).__name__}: {str(exc)[:120]}"
@@ -265,23 +299,37 @@ def _extraction_state(text: str, soup: BeautifulSoup) -> str:
     return "js_fallback_candidate" if len(text.strip()) < 100 and len(soup.select("script[src]")) >= 2 else "static_complete"
 
 
-def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_000_000) -> tuple[dict[str, Any], dict[str, Any]]:
+def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_000_000,
+                  profile: dict | None = None, candidate_source: str = "registry_snapshot") -> tuple[dict[str, Any], dict[str, Any]]:
+    counter = {"requests": 0}
+    record, metrics = _fetch_website(url, timeout=timeout, max_bytes=max_bytes, profile=profile,
+                                     candidate_source=candidate_source, counter=counter)
+    metrics["requests"] = counter["requests"]
+    return record, metrics
+
+
+def _fetch_website(url: str | None, *, timeout: float, max_bytes: int, profile: dict | None,
+                   candidate_source: str, counter: dict) -> tuple[dict[str, Any], dict[str, Any]]:
     supplied_url = str(url or "").strip()
     supplied_scheme = bool(re.match(r"^https?://", supplied_url, re.I))
     normalized = normalize_homepage(url)
     if not normalized:
         return evidence("website", "not_found", "registry_linked_company_website", "https://data.brreg.no/enhetsregisteret/api/enheter", note="No valid registry website URL"), {"requests": 0, "bytes": 0, "latencies_ms": []}
+    if not company_host_allowed(normalized):
+        return evidence("website", "blocked", "company_website_candidate", normalized, note="Directory, marketplace or restricted platform is not a company-owned site"), {"bytes": 0, "latencies_ms": []}
     try:
         assert_public_url(normalized)
     except ValueError as exc:
         return evidence("website", "blocked", "registry_linked_company_website", normalized, note=str(exc)), {"requests": 0, "bytes": 0, "latencies_ms": []}
+    robots_cache = {"_attempts": counter}
     try:
-        if not _robots_allowed(normalized, timeout):
+        if not _robots_allowed(normalized, timeout, robots_cache):
             return evidence("website", "blocked", "registry_linked_company_website", normalized, note="robots.txt disallows this user agent"), {"requests": 1, "bytes": 0, "latencies_ms": []}
     except BudgetExceeded as exc:
         return evidence("website", "not_fetched", "registry_linked_company_website", normalized, note=str(exc)), {"requests": 0, "bytes": 0, "latencies_ms": []}
     started = time.monotonic()
     request = urllib.request.Request(normalized, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
+    request.attempt_counter = counter
     try:
         with SAFE_OPENER.open(request, timeout=bounded_timeout(timeout)) as response:
             content_type = response.headers.get("content-type", "")
@@ -295,7 +343,8 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
             assert_public_url(final_url)
         html = raw.decode("utf-8", errors="replace")
         soup = BeautifulSoup(html, "lxml")
-        structured = extruct.extract(html, base_url=final_url, syntaxes=["json-ld", "microdata", "opengraph"])
+        homepage = capture_page(raw, requested_url=normalized, final_url=final_url, redirect_chain=getattr(request, "redirect_chain", []))
+        structured = {"json-ld": homepage["source_document"]["jsonld"]}
         text = trafilatura.extract(html, url=final_url, include_links=False, include_tables=False, favor_precision=True) or ""
         title = soup.title.get_text(" ", strip=True) if soup.title else ""
         description_tag = soup.select_one('meta[name="description"], meta[property="og:description"]')
@@ -307,24 +356,37 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
             "title": title[:500],
             "description": description[:2000],
             "main_text_excerpt": text[:5000],
-            "social_links": _social_links(final_url, soup),
+            "identity_text_excerpt": homepage["identity_text_excerpt"],
+            "social_links": _social_links(final_url, soup) + structured_social_links(structured),
             "structured_organisations": _jsonld_organisations(structured),
             "content_sha256": __import__("hashlib").sha256(raw).hexdigest(),
             "extraction_state": _extraction_state(text, soup),
+            "candidate_source": candidate_source,
+            "redirect_chain": homepage["redirect_chain"],
         }
-        pages = [{"url": final_url, "title": title[:500], "main_text_excerpt": text[:5000], "content_sha256": value["content_sha256"]}]
+        homepage["main_text_excerpt"] = text[:5000]
+        pages = [homepage]
+        value["pages"] = pages
         social = value["social_links"]
         crawl_errors = []
         requests = 2
         bytes_received = len(raw)
         page_latencies = [elapsed]
         homepage_domain = value["registered_domain"]
-        for page_url in _priority_links(final_url, soup):
+        assessment = assess_website_identity({**(profile or {}), "evidence": {"website": {"value": value, "source_url": final_url}}}) if profile else {}
+        queue = _priority_links(final_url, soup, identity_needed=not assessment.get("publishable"))
+        visited = {final_url.rstrip("/")}
+        while queue and len(visited) < 5:
+            page_url = queue.pop(0)
+            if page_url.rstrip("/") in visited:
+                continue
+            visited.add(page_url.rstrip("/"))
             page, page_social, page_requests, page_bytes, page_elapsed, page_error = _fetch_secondary_page(
                 page_url,
                 homepage_domain=homepage_domain,
                 timeout=timeout,
                 max_bytes=min(max_bytes, 1_000_000),
+                robots_cache=robots_cache,
             )
             requests += page_requests
             bytes_received += page_bytes
@@ -333,12 +395,15 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
             if page:
                 pages.append(page)
                 social.extend(page_social)
+                queue.extend(link for link in page.get("priority_links", []) if link.rstrip("/") not in visited and link not in queue)
             elif page_error:
-                crawl_errors.append({"url": page_url, "error": page_error})
+                crawl_errors.append({"url": page_url, "error": page_error.split(": ", 1)[-1]})
+                if "cap" in page_error or "deadline" in page_error:
+                    break
         value["pages"] = pages
         value["social_links"] = list({(item["platform"], item["url"]): item for item in social}.values())
         value["crawl_errors"] = crawl_errors
-        return evidence("website", "available", "registry_linked_company_website", final_url, value=value, note="Company-controlled claim layer; not an official registry fact", content_sha256=value["content_sha256"]), {"requests": requests, "bytes": bytes_received, "latencies_ms": page_latencies}
+        return evidence("website", "available", "company_owned_website" if candidate_source == "legal_name_domain" else "registry_linked_company_website", final_url, value=value, note="Company-controlled claim layer; not an official registry fact", content_sha256=value["content_sha256"], retrieved_at=homepage["retrieved_at"]), {"requests": requests, "bytes": bytes_received, "latencies_ms": page_latencies}
     except BudgetExceeded as exc:
         return evidence("website", "not_fetched", "registry_linked_company_website", normalized, note=str(exc)), {"requests": 0, "bytes": 0, "latencies_ms": []}
     except urllib.error.HTTPError as exc:
@@ -348,7 +413,8 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
     except urllib.error.URLError as exc:
         if not supplied_scheme and normalized.startswith("https://"):
             first_elapsed = int((time.monotonic() - started) * 1000)
-            record, metrics = fetch_website("http://" + supplied_url, timeout=timeout, max_bytes=max_bytes)
+            record, metrics = _fetch_website("http://" + supplied_url, timeout=timeout, max_bytes=max_bytes,
+                                             profile=profile, candidate_source=candidate_source, counter=counter)
             metrics["requests"] += 2
             metrics["latencies_ms"].insert(0, first_elapsed)
             return record, metrics

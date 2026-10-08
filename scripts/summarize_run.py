@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--report", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
-    rows = [json.loads(line) for line in Path(args.envelopes).read_text().splitlines() if line.strip()]
+    rows = [json.loads(line) for line in Path(args.envelopes).read_text().split("\n") if line.strip()]
     report = json.loads(Path(args.report).read_text())
     validation = validate_envelopes(rows, report["expected_count"])
     assert validation["passed"], validation

@@ -54,7 +54,7 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     rows = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").split("\n"):
         if line.strip():
             rows.append(json.loads(line))
     return rows
@@ -157,7 +157,8 @@ def main() -> None:
     parser.add_argument("--company-timeout-seconds", type=float, default=None)
     parser.add_argument("--max-requests", type=int, default=int(os.environ.get("MAX_OUTBOUND_REQUESTS") or "2000"))
     parser.add_argument("--response-snapshot", help="Saved official responses: JSON object with a responses URL map")
-    parser.add_argument("--modules", default="registry,accounting_obligation,registry_live,financials,roles,group,locations,website")
+    parser.add_argument("--modules", default="registry,accounting_obligation,registry_live,financials,roles,group,locations,website,hiring,activity")
+    parser.add_argument("--discover-websites", action="store_true", help="Try conservative legal-name domain candidates after the registry website")
     args = parser.parse_args()
 
     started_at = utc_now()
@@ -182,7 +183,9 @@ def main() -> None:
     if len(orgs) != expected_count:
         raise SystemExit(f"Expected {expected_count} organisations, received {len(orgs)}")
     requested_modules = [item.strip() for item in args.modules.split(",") if item.strip()]
-    allowed_modules = {"registry", "accounting_obligation", "website", *official_endpoints("000000000")}
+    if args.discover_websites and "website_discovery" not in requested_modules:
+        requested_modules.append("website_discovery")
+    allowed_modules = {"registry", "accounting_obligation", "website", "website_discovery", "hiring", "activity", *official_endpoints("000000000")}
     if set(requested_modules) - allowed_modules:
         parser.error(f"Unknown modules: {sorted(set(requested_modules) - allowed_modules)}")
     previous_profiles, previous_run_id = _load_previous_profiles(Path(args.previous_output) if args.previous_output else None)
@@ -299,7 +302,7 @@ def main() -> None:
     pass2_errors = 0
     completed_tasks = 0
     skipped_tasks = 0
-    priority = ["website", "financials", "roles", "locations", "registry_live", "group", "financial_history"]
+    priority = ["registry_live", "website", "financials", "roles", "hiring", "activity", "website_discovery", "locations", "group", "financial_history"]
     tasks = []
     for module in priority:
         if module not in requested_modules:
@@ -307,7 +310,7 @@ def main() -> None:
         for index, org in enumerate(orgs):
             if org not in found or profile_complete_for_modules(profiles[org], [module]):
                 continue
-            saved = module != "website" and official_endpoints(org)[module][0] in saved_responses.get("responses", {})
+            saved = module not in {"website", "website_discovery", "hiring", "activity"} and official_endpoints(org)[module][0] in saved_responses.get("responses", {})
             tasks.append({"module": module, "organisation_number": org, "company_index": index, "saved": saved})
     # Supplied responses require no live requests and precede all network work.
     tasks.sort(key=lambda task: not task["saved"])
@@ -319,7 +322,7 @@ def main() -> None:
     def skip(task, reason):
         nonlocal skipped_tasks
         org, module = task["organisation_number"], task["module"]
-        url, source_type = (profiles[org].get("website") or "https://data.brreg.no/enhetsregisteret/api/enheter", "registry_linked_company_website") if module == "website" else official_endpoints(org)[module]
+        url, source_type = (profiles[org].get("website") or "https://data.brreg.no/enhetsregisteret/api/enheter", "registry_linked_company_website") if module in {"website", "website_discovery", "hiring", "activity"} else official_endpoints(org)[module]
         profiles[org].setdefault("evidence", {})[module] = evidence(module, "not_fetched", source_type, url, note=reason)
         skipped_orgs.add(org)
         skipped_tasks += 1
@@ -346,7 +349,7 @@ def main() -> None:
                     continue
                 task["profile"] = profiles[org]
                 task["deadline"] = min(stop_scheduling_at, time.monotonic() + company_timeout)
-                task["request_limit"] = 4 if task["module"] == "website" else 2
+                task["request_limit"] = 4 if task["module"] in {"website", "website_discovery"} else 2
                 pool.submit(task, company_timeout)
             if not pool.active:
                 break
@@ -361,8 +364,9 @@ def main() -> None:
                     completed_orgs.add(org)
                     completed_tasks += 1
                 else:
-                    url, source_type = (profiles[org].get("website") or "", "registry_linked_company_website") if module == "website" else official_endpoints(org)[module]
-                    profiles[org].setdefault("evidence", {})[module] = evidence(module, "source_error", source_type, url, note=str(result))
+                    url, source_type = (profiles[org].get("website") or "", "registry_linked_company_website") if module in {"website", "website_discovery", "hiring", "activity"} else official_endpoints(org)[module]
+                    transient = str(result) in {"company_timeout", "worker_exit"} or "BudgetExceeded" in str(result)
+                    profiles[org].setdefault("evidence", {})[module] = evidence(module, "not_fetched" if transient else "source_error", source_type, url, note=str(result))
                     errors_by_org.setdefault(org, []).append(_error("company_enrichment_failed", f"{module}: {result}", "pass2"))
                     pass2_errors += 1
                 profiles[org]["run_metrics"]["requests"] = budget.company_requests[task["company_index"]]

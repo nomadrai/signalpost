@@ -13,6 +13,7 @@ The product reports terminal coverage, exact-entity publication, claim evidence 
 - Run `python scripts/check_batch_limits.py --universe <universe.jsonl> --output-dir <runs>/budget-conformance` to verify 1,000 and 1,100 matching identity rows, exact source attribution, absence of fabricated account values, and zero outbound requests.
 - Budget tests use a local HTTP server to count retries, redirects, robots, and concurrent process exhaustion independently of reported metrics. They also kill unreturned work, verify shared monetary reservations, exercise saved responses at zero budget, and force supervisor recovery before identity loading finishes.
 - Export a saved run with `python scripts/summarize_run.py --envelopes <envelopes.jsonl> --report <report.json> --output <summary.json>`. This validates envelope evidence references and reconciles per-company request totals and the reservation ledger.
+- Verify first-party hiring/activity fixtures with `pytest tests/test_company_signals.py`; these tests must reject expired jobs, off-host links, conflicting organisation numbers, and ambiguous sites while retaining page-specific evidence locators.
 
 ## Promotion gate
 

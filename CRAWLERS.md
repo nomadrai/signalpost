@@ -11,6 +11,7 @@ The main batch uses deterministic registry enrichment first and bounded best-eff
 - Response content is bounded by the website byte limit. Redirects, content types, retry count, per-company work, and global deadline are bounded.
 - Directory, registry, marketplace, social, and parked hosts are candidate or discovery sources, not official company websites.
 - Browser rendering is optional. A JavaScript shell remains `blocked` or `not_available` when the optional browser extra is not installed.
+- Legal-name domain candidates are opt-in (`--discover-websites`) and are allocated only after stronger official field families. They cannot be published from name similarity alone.
 
 ## Runtime controls
 

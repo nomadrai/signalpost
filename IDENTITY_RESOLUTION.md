@@ -5,7 +5,7 @@ The Norwegian organisation number is the stable key. Site and profile candidates
 ## Candidate order
 
 1. Use the registry website field.
-2. Derive conservative `.no` and `.com` host candidates from the legal name after removing legal-form suffixes and normalizing Norwegian characters.
+2. When `--discover-websites` is explicitly enabled, derive conservative `.no` and `.com` host candidates from the legal name after removing legal-form suffixes and normalizing Norwegian characters. These remain candidates until independently verified.
 3. Use an approved search API only when configured and within its budget. Search output is transient candidate input.
 4. Use a leader-to-brand relationship only as a candidate bridge; publish only after the candidate site independently resolves to the same entity.
 

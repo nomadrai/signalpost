@@ -11,6 +11,67 @@ LEGAL_AND_GENERIC = {
     "nuf", "ab", "b", "v", "limited", "ltd", "inc", "plc", "the", "og", "and",
 }
 
+BLOCKED_WEBSITE_HOSTS = {
+    "proff.no", "purehelp.no", "1881.no", "gulesider.no", "firmalisten.no", "companywall.no",
+    "firmadatabasen.no", "sokfirma.no", "yra.no", "northdata.com", "nor47business.com",
+    "linkedin.com", "facebook.com", "instagram.com", "x.com", "twitter.com", "youtube.com", "tiktok.com",
+    "brreg.no", "finn.no", "indeed.com", "nav.no",
+}
+
+
+def company_host_allowed(url: str) -> bool:
+    host = (urllib.parse.urlparse(url).hostname or "").casefold().rstrip(".").removeprefix("www.")
+    return bool(host) and not any(host == blocked or host.endswith("." + blocked) for blocked in BLOCKED_WEBSITE_HOSTS)
+
+
+def organisation_numbers(text: str) -> set[str]:
+    """Match complete checksum-valid numbers, never concatenate arbitrary digits."""
+    numbers = set()
+    for match in re.finditer(r"(?<!\d)([89]\d{2}[ .\u00a0-]?\d{3}[ .\u00a0-]?\d{3})(?!\d)", text):
+        value = re.sub(r"\D", "", match.group())
+        check = 11 - sum(int(digit) * weight for digit, weight in zip(value[:8], (3, 2, 7, 6, 5, 4, 3, 2))) % 11
+        if check == 11:
+            check = 0
+        if check != 10 and check == int(value[-1]):
+            numbers.add(value)
+    return numbers
+
+
+def _owner_numbers(organisations: list) -> set[str]:
+    numbers = set()
+    for owner in organisations:
+        for key in ("vatID", "taxID", "identifier"):
+            if key in owner:
+                numbers.update(organisation_numbers(str(owner[key])))
+    return numbers
+
+
+def _name_matches(name: str, text: str) -> bool:
+    core = _tokens(name)
+    normalized = " " + " ".join(_tokens(text)) + " "
+    return bool(core) and " " + " ".join(core) + " " in normalized
+
+
+def _corroboration(profile: dict, text: str) -> list[str]:
+    records = profile.get("evidence", {})
+    live = records.get("registry_live", {}).get("value") or {}
+    address = profile.get("business_address") or live.get("business_address") or {}
+    proofs = []
+    streets = address.get("adresse") or []
+    if isinstance(streets, str):
+        streets = [streets]
+    normalized = " ".join(_tokens(text))
+    street_match = any(" ".join(_tokens(street)) in normalized for street in streets if _tokens(street))
+    postcode = str(address.get("postnummer") or "")
+    city = str(address.get("poststed") or "")
+    if street_match and ((postcode and re.search(r"(?<!\d)" + re.escape(postcode) + r"(?!\d)", text)) or (city and _name_matches(city, text))):
+        proofs.append("registered_street_and_postcode_or_city")
+    for role in (records.get("roles", {}).get("value") or {}).get("roles", []):
+        if not role.get("inactive") and len(_tokens(role.get("name"))) >= 2 and _name_matches(role["name"], text):
+            proofs.append("registered_role_holder")
+            break
+    return proofs
+
 
 def _tokens(value: Any) -> list[str]:
     text = str(value or "").translate(str.maketrans({"ø": "o", "Ø": "O", "å": "a", "Å": "A", "æ": "ae", "Æ": "AE"}))
@@ -55,8 +116,10 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
     normalized_candidate_text = " ".join(_tokens(candidate_text))
     candidate_tokens = set(_tokens(candidate_text))
     org_digits = re.sub(r"\D", "", str(profile.get("organisation_number") or ""))
-    compact_candidate = re.sub(r"\D", "", candidate_text)
-    compact_homepage_candidate = re.sub(r"\D", "", homepage_candidate_text)
+    homepage_numbers = organisation_numbers(homepage_candidate_text)
+    owner_numbers = organisation_numbers(str(value.get("identity_text_excerpt") or "")) | _owner_numbers(value.get("structured_organisations") or [])
+    labelled_numbers = organisation_numbers(" ".join(re.findall(r"(?:org(?:anisasjonsnummer|anization number|\.?\s*(?:nr|number))?|vat)[^\n]{0,45}", homepage_candidate_text, re.I)))
+    owner_numbers |= labelled_numbers
     overlap = sorted(set(core) & candidate_tokens)
     ratio = len(overlap) / len(set(core)) if core else 0.0
     reasons = []
@@ -66,25 +129,46 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
         "find the best information and most relevant links on all topics related to",
     )
     normalized_raw = unicodedata.normalize("NFKD", candidate_text).encode("ascii", "ignore").decode().casefold()
-    homepage_token_sets = [set(_tokens(part)) for part in homepage_identity_parts if part]
-    exact_homepage_name = bool(core and any(set(core).issubset(tokens) for tokens in homepage_token_sets))
+    exact_homepage_name = any(_name_matches(str(profile.get("name") or ""), str(part)) for part in [value.get("title"), value.get("description"), value.get("identity_text_excerpt"), *structured_names] if part)
     substantive_homepage = len(str(value.get("main_text_excerpt") or "").strip()) >= 100
     is_business_sports_club = bool(re.search(r"(?:^|\s)B\.?\s*I\.?\s*L\.?(?:\s|$)", str(profile.get("name") or ""), re.I))
-    if any(marker in normalized_raw for marker in parked_markers):
+    conflicts = sorted(owner_numbers - {org_digits})
+    proofs = []
+    proof_url = value.get("final_url") or website.get("source_url")
+    guessed = value.get("candidate_source") == "legal_name_domain"
+    if proof_url and not company_host_allowed(proof_url):
+        score = 0.0
+        reasons.append("directory, registry, marketplace or social host is not a company-owned website")
+    elif any(marker in normalized_raw for marker in parked_markers):
         score = 0.1
         reasons.append("captured page is a parked, for-sale, or generic hosting placeholder")
     elif is_business_sports_club and "bedriftsidrett" not in normalized_candidate_text and "b i l" not in normalized_candidate_text:
         score = 0.3
         reasons.append("business sports-club entity points to the operating company's site without club evidence")
-    elif org_digits and org_digits in compact_homepage_candidate:
+    elif conflicts:
+        score = 0.3
+        reasons.append("ownership evidence identifies a different or multiple organisation numbers")
+    elif org_digits in owner_numbers or (org_digits in homepage_numbers and exact_homepage_name):
         score = 1.0
         reasons.append("exact organisation number appears in homepage identity evidence")
-    elif len(core) >= 2 and exact_homepage_name:
+        proofs.append("exact_homepage_organisation_number")
+    elif not re.search(r"\b(konsern|group|portfolio)\b", str(value.get("title") or ""), re.I) and any(
+        org_digits in organisation_numbers(str(page.get("identity_text_excerpt") or ""))
+        and not (organisation_numbers(str(page.get("identity_text_excerpt") or "")) - {org_digits})
+        and _name_matches(str(profile.get("name") or ""), str(page.get("identity_text_excerpt") or ""))
+        for page in value.get("pages") or []):
+        page = next(page for page in value["pages"] if org_digits in organisation_numbers(str(page.get("identity_text_excerpt") or "")))
+        score = 1.0
+        proof_url = page.get("url") or proof_url
+        proofs.append("exact_contact_footer_organisation_number_and_legal_name")
+        reasons.append("same-site ownership footer gives the exact legal name and organisation number")
+    elif exact_homepage_name and not guessed and _corroboration(profile, candidate_text):
         score = 0.95
-        reasons.append("all normalized legal-name tokens appear together in homepage identity evidence")
-    elif len(core) == 1 and exact_homepage_name and substantive_homepage:
-        score = 0.95
-        reasons.append("single distinctive legal-name token appears in homepage identity evidence with substantive content")
+        proofs = ["exact_legal_name", *_corroboration(profile, candidate_text)]
+        reasons.append("exact legal name is independently corroborated by registered identity data")
+    elif exact_homepage_name:
+        score = 0.8
+        reasons.append("legal name alone is insufficient; independent ownership proof is missing")
     elif ratio >= 0.75 and len(overlap) >= 2:
         score = 0.85
         reasons.append("most legal-name tokens appear, but exact identity is incomplete")
@@ -101,8 +185,11 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
         "publishable": status == "exact",
         "legal_name_tokens": core,
         "matched_tokens": overlap,
+        "proofs": proofs,
+        "proof_url": proof_url,
+        "conflicting_organisation_numbers": conflicts,
         "reasons": reasons,
-        "method": "deterministic_name_org_evidence_v2",
+        "method": "deterministic_name_org_evidence_v3",
     }
 
 

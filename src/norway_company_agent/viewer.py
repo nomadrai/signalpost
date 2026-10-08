@@ -130,7 +130,7 @@ def read_envelopes(source: str | Path) -> list[dict[str, Any]]:
     if path.suffix == ".json":
         value = json.loads(path.read_text(encoding="utf-8"))
         return value if isinstance(value, list) else [value]
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").split("\n") if line.strip()]
 
 
 def build_viewer(source: str | Path, output: str | Path) -> dict[str, Any]:
