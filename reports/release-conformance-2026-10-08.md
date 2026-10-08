@@ -3,9 +3,8 @@
 Date: 2026-10-08.
 
 This report records checks run after the v3 identity and first-party signal
-follow-up. The latest local commit is `a2a1f04`; the pushed baseline is
-`c06d9fa`. The JSONL tooling now preserves Unicode line separators inside
-captured page text.
+follow-up. The current pushed commit is `c19fb4b`. The JSONL tooling now
+preserves Unicode line separators inside captured page text.
 
 ## Verification environment
 
@@ -13,8 +12,8 @@ captured page text.
 - Runtime dependencies installed from the frozen `uv.lock`.
 - Pytest installed only in the temporary verification environment, as the
   project documents it as an invocation-time test dependency.
-- A clean clone was installed in a separate temporary environment. Applying
-  the working-tree correction there produced the same passing test result.
+- A clean clone at `c19fb4b` was installed in a separate temporary
+  environment and produced the same passing test result.
 
 ## Checks passed
 
@@ -66,6 +65,28 @@ were clearly parent/service sites, and CRUX exposed conflicting ownership
 evidence. They remain withheld. This is a current manual identity audit of
 the 14 fetched cases; the two failed and one blocked cases were not retried.
 
+## Retained full-size identity review
+
+The interrupted 1,000-company checkpoint retained 64 fetched website cases:
+21 publishable and 43 withheld. Replaying the current deterministic identity
+gate against all 64 stored captures reproduced every stored assessment with
+zero mismatches.
+
+The 21 published cases were reviewed page by page. Seven had an exact
+organisation number in homepage identity evidence; the other 14 had an exact
+legal-name match plus registered street and postcode/city corroboration. All
+21 had an exact assessment, a proof URL matching the fetched source URL, a
+64-character content hash, at least one replayable page document, and no
+conflicting organisation number. The cases with blank homepage identity
+excerpts were supported by a captured contact/about page or structured/main
+page content, including Rana Hundesenter, Fokus Golf, and Tromsøterminalen.
+
+All 43 withheld fetched cases were `ambiguous`, carried no published website
+claim, and had no publishable identity assessment. The separate 15 blocked and
+25 failed website outcomes had no retained page capture and were not retried;
+they remain unresolved until a new authorized live allocation or supplied
+response captures are available.
+
 ## UI check
 
 The viewer contains a viewport declaration, responsive auto-fit card grids,
@@ -98,9 +119,9 @@ as an audit artifact and is not resumed or counted as a submission result.
    interrupted live attempt is not a final result; no official response
    snapshot contents are currently available, so the completed 1,000/1,100
    checks above remain identity-only and deliberately zero-budget.
-2. Perform the fresh page-by-page identity and exact-evidence audit using the
-   retained live capture artifacts.
-3. Repeat the desktop/mobile screenshot check in an image with the required
+2. Repeat the desktop/mobile screenshot check in an image with the required
    Chromium shared libraries.
-4. Push and verify the latest local JSONL-tooling fix before producing a
-   submission candidate.
+3. Retry the blocked/failed website outcomes and review their exact evidence
+   only with a new authorized live
+   allocation or supplied response captures before producing a submission
+   candidate.
