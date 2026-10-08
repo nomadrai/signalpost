@@ -77,7 +77,7 @@ uv run python scripts/run_competition_batch.py \
 uv run --with pytest pytest -q
 ```
 
-The current working tree was verified on October 8, 2026 with 129 tests and 5 subtests, followed by deterministic 1,000/1,100-company matching-universe checks that emitted every terminal envelope with zero outbound requests. The earlier published archive check was 104 tests and 5 subtests plus a one-company live BRREG smoke run.
+The current pushed tree was verified on October 8, 2026 with 131 tests and 5 subtests, followed by deterministic 1,000/1,100-company matching-universe checks that emitted every terminal envelope with zero outbound requests. A pinned clean clone reproduced the same test result. The earlier published archive check was 104 tests and 5 subtests plus a one-company live BRREG smoke run.
 
 Increase `--count` and `--expected-count` together for a larger local test. The 100-row smoke test above is practice only; Builderr supplies the companies for every official run.
 
