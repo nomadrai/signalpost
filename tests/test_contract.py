@@ -143,3 +143,18 @@ def test_viewer_escapes_fetched_text_and_builds_compare_and_changes(tmp_path: Pa
     assert (out / "compare.html").exists()
     assert (out / "changes.html").exists()
     assert "src=\"http" not in index
+
+
+def test_validate_evidence_preserves_unicode_line_separators_in_jsonl(tmp_path: Path):
+    row = build_contract_envelope(_profile(), run_id="unicode", started_at="2026-10-02T00:00:00Z",
+                                  completed_at="2026-10-02T00:00:01Z", requested_modules=["registry"])
+    row["claims"][0]["value"] = "captured page text\u2028with a separator"
+    source = tmp_path / "envelopes.jsonl"
+    source.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "validate_evidence.py"), str(source)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert json.loads(result.stdout)["passed"] is True

@@ -17,7 +17,11 @@ def main() -> None:
     parser.add_argument("envelopes")
     args = parser.parse_args()
     errors = []
-    for line_number, line in enumerate(Path(args.envelopes).read_text(encoding="utf-8").splitlines(), 1):
+    # JSONL records are delimited by the physical LF written by the producer.
+    # str.splitlines() also treats Unicode line/paragraph separators inside a
+    # captured page excerpt as record boundaries, even though they are valid
+    # JSON string content.
+    for line_number, line in enumerate(Path(args.envelopes).read_text(encoding="utf-8").split("\n"), 1):
         if not line.strip():
             continue
         row = json.loads(line)

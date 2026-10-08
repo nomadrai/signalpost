@@ -27,7 +27,10 @@ def recover_checkpoint(args, started: float) -> None:
     output = Path(args.output)
     prior = {}
     if output.exists():
-        for line in output.read_text(encoding="utf-8").splitlines():
+        # Only the physical LF separates JSONL records. Captured page text can
+        # contain Unicode line/paragraph separators that splitlines() would
+        # incorrectly treat as record boundaries.
+        for line in output.read_text(encoding="utf-8").split("\n"):
             row = json.loads(line)
             if row.get("run_id") == args.run_id:
                 prior[str(row.get("organisation_number"))] = row
