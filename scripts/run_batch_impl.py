@@ -12,6 +12,12 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+
+# Keep the implementation's own deadline inclusive of module import time when
+# it is invoked directly (the public wrapper supplies an even earlier process
+# start timestamp through _SIGNALPOST_STARTED_MONOTONIC).
+_MODULE_STARTED_MONOTONIC = time.monotonic()
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -162,7 +168,7 @@ def main() -> None:
     args = parser.parse_args()
 
     started_at = utc_now()
-    started_monotonic = float(os.environ.get("_SIGNALPOST_STARTED_MONOTONIC", time.monotonic()))
+    started_monotonic = float(os.environ.get("_SIGNALPOST_STARTED_MONOTONIC", _MODULE_STARTED_MONOTONIC))
     governor = BudgetGovernor.from_environment()
     deadline_seconds = args.deadline_seconds if args.deadline_seconds is not None else _deadline_value("RUN_DEADLINE_SECONDS", 2700.0)
     if not math.isfinite(deadline_seconds) or not 0 <= deadline_seconds <= 2700:
@@ -268,7 +274,11 @@ def main() -> None:
     for org in orgs:
         append_progress(journal_path, latest[org], "pass1")
 
-    context = multiprocessing.get_context("spawn")
+    # The POSIX supervisor already provides process-tree isolation. Forking on
+    # POSIX also avoids paying a full application-import cost before a short
+    # deadline can even start the first enrichment task; retain spawn for
+    # platforms where fork is unavailable.
+    context = multiprocessing.get_context("fork" if os.name == "posix" else "spawn")
     budget = RunBudget(max_requests=args.max_requests, deadline=stop_scheduling_at,
                        companies=len(orgs), governor=governor, context=context,
                        ledger_path=str(output_path.with_suffix(output_path.suffix + ".budget.jsonl")), run_id=args.run_id)

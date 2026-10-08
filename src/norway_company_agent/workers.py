@@ -88,8 +88,14 @@ class BoundedWorkers:
             return
         process = slot["process"]
         if process.is_alive():
+            process.terminate()
+        # A killed worker has no useful work left to finish. Keep shutdown
+        # comfortably inside the run deadline even when several slots must be
+        # reaped after a stalled task.
+        process.join(timeout=0.05)
+        if process.is_alive():
             process.kill()
-        process.join(timeout=0.5)
+            process.join(timeout=0.05)
         slot["pipe"].close()
         process.close()
         self.slots[index] = None
