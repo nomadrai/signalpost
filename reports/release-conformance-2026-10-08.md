@@ -3,8 +3,9 @@
 Date: 2026-10-08.
 
 This report records checks run after the v3 identity and first-party signal
-follow-up. The working tree is based on commit `4286cc8`; the deadline and
-worker-shutdown correction in this report is currently uncommitted.
+follow-up. The latest local commit is `a2a1f04`; the pushed baseline is
+`c06d9fa`. The JSONL tooling now preserves Unicode line separators inside
+captured page text.
 
 ## Verification environment
 
@@ -19,14 +20,15 @@ worker-shutdown correction in this report is currently uncommitted.
 
 | Check | Result |
 |---|---|
-| Full test suite | 129 passed, 5 subtests passed |
+| Full test suite | 130 passed, 5 subtests passed |
 | Matching 1,000-company run | 1,000 available envelopes, 0 requests, validation passed |
 | Matching 1,100-company run | 1,100 available envelopes, 0 requests, validation passed |
 | Universe attribution | 411,160 rows; SHA-256 `b82d6a3e7231d1759a958c282bc4366b80ec2fab8095053d8ed7fa9cd01bc838` |
 | Refresh replay | 2 expected changes, zero false changes, idempotent rerun |
-| Evidence validation | Passed for the 1,000-company output and saved wrapper smoke output |
+| Evidence validation | Passed for the 1,000-company output, saved wrapper smoke output, and interrupted live checkpoint |
 | Static viewer | Built 1,004 files for 1,000 profiles; structural HTML checks passed |
 | Deadline regression | Passed after including implementation import time and tightening worker reaping |
+| JSONL Unicode regression | Passed; physical LF records remain valid when captured text contains U+2028 |
 
 The reproducible large-run artifacts are under the temporary verification
 directory used for this check and are not product data. The committed public
@@ -76,14 +78,29 @@ verification area, but Chromium could not launch because the sandbox image
 lacks `libglib-2.0.so.0`. Therefore 390px and 1280px screenshots were not
 produced in this environment.
 
+## Interrupted full-size live allocation
+
+A 1,000-company live allocation was started with the confirmed 2,000-attempt
+cap. It wrote 1,000 valid checkpoint envelopes, reserved 1,753 attempts,
+left 247 attempts, and declared USD 0 before it was stopped at the user's
+request to return to commit/push work. The checkpoint passes evidence
+validation and contains 1,000 `available` identity envelopes. No final run
+report was written, so this is not a completed full-size coverage result.
+
+The runner correctly fails closed when `--resume` finds checkpoint data but no
+matching prior budget report. It must not reset the allowance or infer that
+the interrupted run used zero requests. The partial run is therefore retained
+as an audit artifact and is not resumed or counted as a submission result.
+
 ## Remaining release blockers
 
-1. Run a full-size live or supplied-response-snapshot allocation. No official
-   response snapshot contents are currently available, so the 1,000/1,100
-   checks above are identity-only and deliberately zero-budget.
+1. Complete a full-size live or supplied-response-snapshot allocation. The
+   interrupted live attempt is not a final result; no official response
+   snapshot contents are currently available, so the completed 1,000/1,100
+   checks above remain identity-only and deliberately zero-budget.
 2. Perform the fresh page-by-page identity and exact-evidence audit using the
    retained live capture artifacts.
 3. Repeat the desktop/mobile screenshot check in an image with the required
    Chromium shared libraries.
-4. Review and commit the working-tree deadline correction before producing a
+4. Push and verify the latest local JSONL-tooling fix before producing a
    submission candidate.
