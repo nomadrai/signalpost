@@ -3,7 +3,7 @@
 Date: 2026-10-08.
 
 This report records checks run after the v3 identity and first-party signal
-follow-up. The current pushed commit is `c19fb4b`. The JSONL tooling now
+follow-up. The current working commit is `dbe9a93`. The JSONL tooling now
 preserves Unicode line separators inside captured page text.
 
 ## Verification environment
@@ -99,11 +99,18 @@ The viewer contains a viewport declaration, responsive auto-fit card grids,
 search and state filtering, profile source links, comparison controls, and a
 change-history page. A generated-output check found 1,000 data rows and
 profile pages, 1,000 index cards, three comparison selectors, a viewport
-declaration, and no unsafe `javascript:`/`data:` HTML URLs. Playwright and
-Chromium were installed in the temporary
-verification area, but Chromium could not launch because the sandbox image
-lacks `libglib-2.0.so.0`. Therefore 390px and 1280px screenshots were not
-produced in this environment.
+declaration, and no unsafe `javascript:`/`data:` HTML URLs. Playwright
+Chromium 151.0.7922.34 then loaded the generated viewer at both required
+viewport sizes. Search, state filtering, comparison, profile navigation, and
+browser-console checks passed with no page or console errors. Screenshots were
+written to `ROOT/runs/ui-screenshots/`:
+
+- `mobile-390x844.png` — 390 × 844 viewport.
+- `desktop-1280x900.png` — 1,280 × 900 viewport.
+
+The browser required locally extracted Debian runtime libraries in this
+sandbox; no product dependency or viewer code change was needed for the
+check.
 
 ## Interrupted full-size live allocation
 
@@ -125,9 +132,7 @@ as an audit artifact and is not resumed or counted as a submission result.
    interrupted live attempt is not a final result; no official response
    snapshot contents are currently available, so the completed 1,000/1,100
    checks above remain identity-only and deliberately zero-budget.
-2. Repeat the desktop/mobile screenshot check in an image with the required
-   Chromium shared libraries.
-3. Retry the blocked/failed website outcomes and review their exact evidence
+2. Retry the blocked/failed website outcomes and review their exact evidence
    only with a new authorized live
    allocation or supplied response captures before producing a submission
    candidate.

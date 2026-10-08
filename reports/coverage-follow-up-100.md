@@ -64,4 +64,4 @@ Both runs passed exact-count, source-attribution, no-fabricated-financial-values
 
 `--discover-websites` is now opt-in. It tries conservative legal-name `.no`/`.com` candidates only after stronger field families and never publishes from name similarity alone. The default official allocation does not spend the shared request cap on speculative domains before identity, accounts, roles, and registry-linked website work.
 
-Remaining release checks are a fresh manual identity audit, full-size live/snapshot allocation using the supplied official responses, pinned clean-clone installation, and UI screenshots.
+Remaining release checks are a fresh manual identity audit, full-size live/snapshot allocation using the supplied official responses, and any final candidate packaging. The pinned clean-clone installation passed; Playwright Chromium checks also passed at 390×844 and 1280×900, with artifacts recorded in `ROOT/runs/ui-screenshots/`.
