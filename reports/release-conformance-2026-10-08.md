@@ -20,7 +20,7 @@ captured page text.
 
 | Check | Result |
 |---|---|
-| Full test suite | 130 passed, 5 subtests passed |
+| Full test suite | 131 passed, 5 subtests passed |
 | Matching 1,000-company run | 1,000 available envelopes, 0 requests, validation passed |
 | Matching 1,100-company run | 1,100 available envelopes, 0 requests, validation passed |
 | Universe attribution | 411,160 rows; SHA-256 `b82d6a3e7231d1759a958c282bc4366b80ec2fab8095053d8ed7fa9cd01bc838` |
@@ -28,7 +28,7 @@ captured page text.
 | Evidence validation | Passed for the 1,000-company output, saved wrapper smoke output, and interrupted live checkpoint |
 | Static viewer | Built 1,004 files for 1,000 profiles; structural HTML checks passed |
 | Deadline regression | Passed after including implementation import time and tightening worker reaping |
-| JSONL Unicode regression | Passed; physical LF records remain valid when captured text contains U+2028 |
+| JSONL Unicode regression | Passed in evidence validation and supervisor recovery; physical LF records remain valid when captured text contains U+2028 |
 
 The reproducible large-run artifacts are under the temporary verification
 directory used for this check and are not product data. The committed public

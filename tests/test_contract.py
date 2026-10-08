@@ -5,13 +5,16 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
 
 from norway_company_agent.batch import read_organisation_inputs, valid_norwegian_organisation_number  # noqa: E402
 from norway_company_agent.budget import BudgetGovernor  # noqa: E402
@@ -19,6 +22,7 @@ from norway_company_agent.evidence import evidence  # noqa: E402
 from norway_company_agent.sampling import iter_bulk  # noqa: E402
 from norway_company_agent.schema import build_contract_envelope, stable_claim_id  # noqa: E402
 from norway_company_agent.viewer import build_viewer  # noqa: E402
+from run_batch import recover_checkpoint  # noqa: E402
 
 
 VALID_ORG = "993578843"
@@ -158,3 +162,25 @@ def test_validate_evidence_preserves_unicode_line_separators_in_jsonl(tmp_path: 
         check=True,
     )
     assert json.loads(result.stdout)["passed"] is True
+
+
+def test_supervisor_recovery_reads_unicode_line_separators_in_jsonl(tmp_path: Path):
+    row = build_contract_envelope(_profile(), run_id="recovery", started_at="2026-10-02T00:00:00Z",
+                                  completed_at="2026-10-02T00:00:01Z", requested_modules=["registry"])
+    row["claims"][0]["value"] = "captured page text\u2028with a separator"
+    output = tmp_path / "envelopes.jsonl"
+    output.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
+    inputs = tmp_path / "organisations.txt"
+    inputs.write_text(VALID_ORG + "\n", encoding="utf-8")
+    args = SimpleNamespace(
+        output=str(output),
+        input=str(inputs),
+        organisations=None,
+        profiles_output=str(tmp_path / "profiles.jsonl"),
+        report=str(tmp_path / "report.json"),
+        run_id="recovery",
+    )
+    recover_checkpoint(args, time.monotonic())
+    recovered = json.loads(output.read_text(encoding="utf-8").split("\n")[0])
+    assert recovered["organisation_number"] == VALID_ORG
+    assert recovered["claims"][0]["value"] == "captured page text\u2028with a separator"

@@ -31,6 +31,8 @@ def recover_checkpoint(args, started: float) -> None:
         # contain Unicode line/paragraph separators that splitlines() would
         # incorrectly treat as record boundaries.
         for line in output.read_text(encoding="utf-8").split("\n"):
+            if not line.strip():
+                continue
             row = json.loads(line)
             if row.get("run_id") == args.run_id:
                 prior[str(row.get("organisation_number"))] = row
