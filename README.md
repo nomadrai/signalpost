@@ -150,6 +150,20 @@ python scripts/check_batch_limits.py \
 
 See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results.
 
+Audit a retained checkpoint without resuming it or making network requests:
+
+```bash
+PYTHONPATH=src python scripts/audit_batch_checkpoint.py \
+  --input <organisations.jsonl> \
+  --envelopes <run>/envelopes.jsonl \
+  --ledger <run>/envelopes.jsonl.budget.jsonl \
+  --universe <financial-filer-master-2025.jsonl>
+```
+
+The audit validates terminal rows, claim evidence, input/output identity
+matching, and the append-only request ledger. It deliberately does not
+reconstruct a missing runner report or make a resumed live request.
+
 Build the dependency-light static viewer without a server or external assets:
 
 ```bash

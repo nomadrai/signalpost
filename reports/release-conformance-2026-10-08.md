@@ -3,7 +3,7 @@
 Date: 2026-10-08.
 
 This report records checks run after the v3 identity and first-party signal
-follow-up. The current working commit is `dbe9a93`. The JSONL tooling now
+follow-up. The JSONL tooling now
 preserves Unicode line separators inside captured page text.
 
 ## Verification environment
@@ -126,12 +126,36 @@ matching prior budget report. It must not reset the allowance or infer that
 the interrupted run used zero requests. The partial run is therefore retained
 as an audit artifact and is not resumed or counted as a submission result.
 
+## Fresh bounded full-size live allocation
+
+A separate fresh run used the same 1,000-company conformance input with the
+confirmed 2,700-second deadline and 2,000-attempt shared cap. It completed with
+all terminal rows and a final runner report:
+
+| Check | Result |
+|---|---|
+| Input/output | 1,000 / 1,000 unique envelopes |
+| Elapsed | 381.61 seconds |
+| HTTP attempts | 2,000 reserved; 0 remaining |
+| Declared third-party cost | USD 0 |
+| Accounts | 661 available, 339 not available |
+| Websites | 28 available, 46 ambiguous, 14 blocked, 22 failed |
+| Company-owned profiles | 14 available |
+| Hiring/activity | 0 published items |
+| Evidence validation | Passed |
+
+The run selected identities from the supplied normalized universe and is not an
+official Builderr batch. No official response snapshot was supplied, so this
+result measures bounded live behavior and accounting rather than final daily-run
+coverage. The reproducible artifacts are under
+`ROOT/runs/release-live-1000-e276605/`; the network-free audit tool is
+`scripts/audit_batch_checkpoint.py`.
+
 ## Remaining release blockers
 
-1. Complete a full-size live or supplied-response-snapshot allocation. The
-   interrupted live attempt is not a final result; no official response
-   snapshot contents are currently available, so the completed 1,000/1,100
-   checks above remain identity-only and deliberately zero-budget.
+1. Run against the actual official batch or supplied response snapshot. The
+   fresh live conformance allocation above is not an official daily result, and
+   no official response snapshot contents are currently available.
 2. Retry the blocked/failed website outcomes and review their exact evidence
    only with a new authorized live
    allocation or supplied response captures before producing a submission

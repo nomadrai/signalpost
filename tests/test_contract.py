@@ -22,6 +22,7 @@ from norway_company_agent.evidence import evidence  # noqa: E402
 from norway_company_agent.sampling import iter_bulk  # noqa: E402
 from norway_company_agent.schema import build_contract_envelope, stable_claim_id  # noqa: E402
 from norway_company_agent.viewer import build_viewer  # noqa: E402
+from audit_batch_checkpoint import audit_checkpoint  # noqa: E402
 from run_batch import recover_checkpoint  # noqa: E402
 
 
@@ -184,3 +185,25 @@ def test_supervisor_recovery_reads_unicode_line_separators_in_jsonl(tmp_path: Pa
     recovered = json.loads(output.read_text(encoding="utf-8").split("\n")[0])
     assert recovered["organisation_number"] == VALID_ORG
     assert recovered["claims"][0]["value"] == "captured page text\u2028with a separator"
+
+
+def test_checkpoint_audit_validates_complete_output_without_reconstructing_report(tmp_path: Path):
+    row = build_contract_envelope(_profile(), run_id="audit", started_at="2026-10-02T00:00:00Z",
+                                  completed_at="2026-10-02T00:00:01Z", requested_modules=["registry"])
+    input_path = tmp_path / "input.jsonl"
+    input_path.write_text(json.dumps({"organisation_number": VALID_ORG}) + "\n", encoding="utf-8")
+    envelopes_path = tmp_path / "envelopes.jsonl"
+    envelopes_path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    ledger_path = tmp_path / "envelopes.jsonl.budget.jsonl"
+    ledger_path.write_text(json.dumps({"run_id": "audit", "outbound_requests": 7,
+                                       "remaining_outbound_requests": 1993, "cost_usd": 0.0}) + "\n",
+                           encoding="utf-8")
+    universe_path = tmp_path / "universe.jsonl"
+    universe_path.write_text(json.dumps({"organisation_number": VALID_ORG, "name": "Example AS"}) + "\n",
+                             encoding="utf-8")
+    result = audit_checkpoint(input_path, envelopes_path, ledger_path, universe_path)
+    assert result["validation"]["passed"] is True
+    assert result["input_output_match"] is True
+    assert result["reserved_outbound_requests"] == 7
+    assert result["final_report_present"] is False
+    assert result["classification"] == "complete terminal checkpoint audit; not a final run report"
