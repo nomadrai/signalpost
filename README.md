@@ -148,7 +148,7 @@ python scripts/check_batch_limits.py \
   --output-dir <runs>/budget-conformance
 ```
 
-See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, and `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior.
+See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, and `reports/discovery-allocation-100.md` for the opt-in website-discovery measurement.
 
 Audit a retained checkpoint without resuming it or making network requests:
 
