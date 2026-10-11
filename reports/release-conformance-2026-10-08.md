@@ -19,7 +19,7 @@ preserves Unicode line separators inside captured page text.
 
 | Check | Result |
 |---|---|
-| Full test suite | 131 passed, 5 subtests passed |
+| Full test suite on current tree | 132 passed, 5 subtests passed |
 | Matching 1,000-company run | 1,000 available envelopes, 0 requests, validation passed |
 | Matching 1,100-company run | 1,100 available envelopes, 0 requests, validation passed |
 | Universe attribution | 411,160 rows; SHA-256 `b82d6a3e7231d1759a958c282bc4366b80ec2fab8095053d8ed7fa9cd01bc838` |
@@ -34,6 +34,10 @@ The reproducible large-run artifacts are under the temporary verification
 directory used for this check and are not product data. The committed public
 coverage reports remain `bounded-smoke-100.md` and
 `coverage-follow-up-100.md`.
+
+The clean-clone verification at `c19fb4b` covered the preceding 131-test tree.
+The current pushed tree adds the checkpoint-audit regression test and passes the
+full 132-test suite locally.
 
 The saved-response scalability check used a temporary synthetic response map
 solely to exercise the supplied-response interface at 1,000 companies. Its
@@ -151,12 +155,24 @@ coverage. The reproducible artifacts are under
 `ROOT/runs/release-live-1000-e276605/`; the network-free audit tool is
 `scripts/audit_batch_checkpoint.py`.
 
-## Remaining release blockers
+## Release follow-up — clarified 2026-10-11
 
-1. Run against the actual official batch or supplied response snapshot. The
-   fresh live conformance allocation above is not an official daily result, and
-   no official response snapshot contents are currently available.
-2. Retry the blocked/failed website outcomes and review their exact evidence
-   only with a new authorized live
-   allocation or supplied response captures before producing a submission
-   candidate.
+The [published contract](https://builderr.ai/docs/signalpost-evaluation-harness.md)
+and [participant brief](https://builderr.ai/starter-briefs/signalpost.md) supply the
+official company batch at evaluation time and require a local 100-company smoke
+report for submission. An official-batch run is not a pre-submission dependency.
+The promised frozen registry snapshot anchors identity; saved accounts, roles,
+subunit and website responses are not promised. Earlier wording here incorrectly
+treated an official batch or optional response map as a local release blocker.
+
+1. Verify installation, the exact run command and evidence output at the chosen
+   final candidate revision, and complete its release package.
+2. Improve measured external coverage and request allocation without relying on
+   saved enrichment responses. Retained blocked/failed cases can be investigated
+   within a new bounded allocation; honest unavailable states remain valid output.
+3. Confirm deployment resource/network details and any optional provider access.
+   The default runner requires no hosted-model or search-provider credential.
+
+Only an actual official evaluation can establish the score or qualification.
+See [runtime and credentials](../docs/runtime-and-credentials.md) for the input
+and API-key distinctions.

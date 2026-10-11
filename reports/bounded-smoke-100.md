@@ -65,4 +65,4 @@ Both passed envelope/evidence validation, preserved exact names and universe att
 - Saved official responses enrich accounts with zero outbound allowance.
 - Concurrent search/model reservations share one monetary cap.
 
-Full-size live coverage, fresh manual identity review, pinned clean-clone installation, and browser screenshot checks remain pending.
+The retained full-size identity review, pinned clean-clone installation, and browser screenshot checks are now recorded in `release-conformance-2026-10-08.md`. Final candidate packaging and verification at the selected commit remain. The public requirements reviewed on 2026-10-11 supply the official batch at evaluation time; it is not a prerequisite for local submission preparation. Saved response maps are optional.

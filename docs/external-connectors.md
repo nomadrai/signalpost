@@ -1,7 +1,9 @@
 # External discovery and sentiment
 
-External intelligence is now 55/100 in the revised competition rubric. Individual connectors remain
-quarantined until their data-rights and held-out gates pass; planned or experimental output earns zero.
+External findings contribute to the challenge's 50-point recall/coverage
+dimension, while precision/evidence, synthesis and UX contribute the remaining
+50 points. Individual connectors remain quarantined until their data rights and
+held-out gates pass; planned or experimental output earns zero.
 
 ## Missing-website discovery
 
@@ -25,7 +27,8 @@ is [closed to new customers and scheduled to discontinue on 1 January 2027](http
 Serper and Tavily can be evaluated as declared alternatives only after their storage, source, and crawling
 rights are accepted for this use.
 
-Production discovery gate:
+Local promotion gate for a discovery strategy (not a Builderr submission
+requirement):
 
 - at least 500 frozen organisations, including at least 200 verified site-exists positives, 150 hard
   parent/franchise/ambiguous negatives, and 100 no-site or unresolved cases;
@@ -33,6 +36,11 @@ Production discovery gate:
 - exact-domain precision at least 99.5%, recall at least 70%, and eligible-population coverage at least 35%;
 - zero wrong-company publications; and
 - URL, redirect chain, retrieval time, content hash, exact-entity proof, cost, and latency for every publication.
+
+Any promoted search connector must also use the batch's shared request ledger,
+deadline supervisor and monetary reservation pool. `BRAVE_SEARCH_API_KEY` is
+only an environment variable for the standalone transient experiment until that
+integration is completed. A search key is not an AI model key.
 
 ## Norwegian company sentiment
 

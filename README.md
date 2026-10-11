@@ -77,7 +77,7 @@ uv run python scripts/run_competition_batch.py \
 uv run --with pytest pytest -q
 ```
 
-The current pushed tree was verified on October 8, 2026 with 131 tests and 5 subtests, followed by deterministic 1,000/1,100-company matching-universe checks that emitted every terminal envelope with zero outbound requests. A pinned clean clone reproduced the same test result. The earlier published archive check was 104 tests and 5 subtests plus a one-company live BRREG smoke run.
+The current pushed tree was verified on October 11, 2026 with 132 tests and 5 subtests, followed by deterministic 1,000/1,100-company matching-universe checks that emitted every terminal envelope with zero outbound requests. The pinned clean clone at the release-conformance checkpoint reproduced the preceding 131-test result; the current tree adds the network-free checkpoint-audit regression coverage. The earlier published archive check was 104 tests and 5 subtests plus a one-company live BRREG smoke run.
 
 Increase `--count` and `--expected-count` together for a larger local test. The 100-row smoke test above is practice only; Builderr supplies the companies for every official run.
 
@@ -112,7 +112,7 @@ Submit a repository with:
 - a machine-readable run report with runtime, request count and third-party cost;
 - declared models, APIs, licences and source-rights assumptions.
 
-Email the repository URL, run command, models/APIs and expected cost per 100-company run to `submit@builderr.ai`.
+Email the repository URL, exact commit hash, 100-company smoke report, run command, models/APIs/licences, expected cost per official run, agent name and contact details to `submit@builderr.ai`. Builderr supplies the evaluation input at run time; obtaining that batch locally is not a prerequisite for submission. See [runtime and credentials](docs/runtime-and-credentials.md) for supplied inputs and optional search/model keys.
 
 ## Deterministic batch interface
 
@@ -134,7 +134,7 @@ The supported terminal states are `available`, `not_available`, `blocked`, `not_
 
 - The default wall-clock deadline is **2,700 seconds**, including startup and local processing. `--deadline-seconds` or `RUN_DEADLINE_SECONDS` can lower it. Isolated enrichment workers are killed at their task deadline or the run's safety boundary. A POSIX process-group supervisor bounds shutdown and recovers terminal rows from the last atomic checkpoint if the main runner stalls. Zero selects local-only processing and disables enrichment rather than imposing a zero-time file-writing deadline.
 - The default shared cap is **2,000 outbound HTTP attempts**. `--max-requests` or `MAX_OUTBOUND_REQUESTS` can lower it. Failed requests, retries, redirects, and robots fetches all reserve a slot before transport. The append-only `<output>.budget.jsonl` ledger records reservations before sending. Domain parsing uses the bundled suffix list and performs no hidden suffix-list download.
-- One field family is scheduled across companies before moving to the next: accounts, roles, websites, hiring/activity, workplaces, live identity, group, and account history. Websites get at most four attempts per task; official modules get at most two, including retries/redirects. Account-history starts retain a shared 2.1-second minimum interval. Unattempted fields have explicit `not_available` states and budget/deadline reasons; an identity-backed result can still be `available`. Conservative legal-name domain discovery is opt-in with `--discover-websites`; it is not enabled by the default allocation because speculative candidates can consume the shared allowance before stronger official fields.
+- Saved official responses are consumed first when supplied. Live field-family priority is identity, registry-listed websites, accounts, roles, hiring/activity, opt-in website discovery, workplaces, group, and account history. Websites get at most four attempts per task; official modules get at most two, including retries/redirects. Account-history starts retain a shared 2.1-second minimum interval. Unattempted fields have explicit `not_available` states and budget/deadline reasons; an identity-backed result can still be `available`. Conservative legal-name domain discovery is opt-in with `--discover-websites`; it runs after the stronger default fields and is not a search-provider or model integration.
 - `--response-snapshot <responses.json>` accepts a saved JSON object with `retrieved_at`, optional `effective_at`, and a `responses` map keyed by official URL. Each value has `status`, and either `body` or `raw_json`. Saved responses are consumed first, retain their source timestamps/hashes, count as `snapshot_reads`, and consume no outbound requests. Missing saved responses may use live HTTP within the cap.
 - Normalized universe JSONL is attributed to its published universe source, its exact supplied byte hash, and its local file identifier. It supports identity and the latest-filing-year flag; it supplies no financial amounts, roles, or subunit responses. Local reads have no fabricated HTTP status.
 - Monetary reservations share one **USD 10 maximum** across search and models. `MAX_COST_USD` defaults to zero, and search/model call limits default to zero. The batch has no enabled paid connector. A monetary allowance alone enables no provider.

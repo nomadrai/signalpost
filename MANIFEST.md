@@ -16,6 +16,8 @@
 
 No model or paid API is called by the default batch. Optional model, search, and licensed connectors must declare provider, model/version, acquisition mode, source rights, retention policy, and per-run budget before they can publish claims. The repository contains only variable names in `.env.example`; real credentials belong in the environment or an agent-only environment file.
 
+See [runtime and credentials](docs/runtime-and-credentials.md) for the distinction between local viewer search, deterministic research, the standalone Brave experiment, and future hosted-model integration.
+
 ## Cost declaration
 
 The deterministic default declares USD 0 third-party API cost. Actual runtime cost is the sum of explicitly enabled provider calls and is recorded per envelope and run report. A zero-budget run must still emit complete terminal envelopes.

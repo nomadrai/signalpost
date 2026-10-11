@@ -2,6 +2,13 @@
 
 The product reports terminal coverage, exact-entity publication, claim evidence completeness, refresh correctness, runtime p50/p95, request count, bytes, and declared third-party cost.
 
+Builderr supplies the official organisation-number batch and frozen identity
+registry snapshot at evaluation time. A local official batch is not required for
+submission preparation; the required local artifact is the 100-company smoke
+report. The shared official set may grow, so local checks must not hard-code a
+permanent maximum. Saved accounts, roles, workplace and website responses are
+optional inputs rather than an assumed evaluator dependency.
+
 ## Local checks
 
 - Run the complete Python test suite with `PYTHONPATH=src:. python -m pytest -q`.
@@ -14,6 +21,7 @@ The product reports terminal coverage, exact-entity publication, claim evidence 
 - Budget tests use a local HTTP server to count retries, redirects, robots, and concurrent process exhaustion independently of reported metrics. They also kill unreturned work, verify shared monetary reservations, exercise saved responses at zero budget, and force supervisor recovery before identity loading finishes.
 - Export a saved run with `python scripts/summarize_run.py --envelopes <envelopes.jsonl> --report <report.json> --output <summary.json>`. This validates envelope evidence references and reconciles per-company request totals and the reservation ledger.
 - Verify first-party hiring/activity fixtures with `pytest tests/test_company_signals.py`; these tests must reject expired jobs, off-host links, conflicting organisation numbers, and ambiguous sites while retaining page-specific evidence locators.
+- Report the models, APIs, licences, source rights and expected cost for the exact candidate revision. The default batch has no hosted-model or paid-search dependency. A hosted model key is needed only when an optional model connector is actually invoked; a search-provider key is separate.
 
 ## Promotion gate
 
