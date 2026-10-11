@@ -131,6 +131,34 @@ def test_batch_runner_emits_one_available_row_at_zero_deadline(tmp_path: Path):
     assert rows[0]["errors"][0]["code"] == "deadline_pass2_skipped"
 
 
+def test_batch_report_attributes_zero_request_local_signal_work(tmp_path: Path):
+    input_path = tmp_path / "input.txt"
+    input_path.write_text(VALID_ORG + "\n", encoding="utf-8")
+    bulk_path = tmp_path / "universe.jsonl"
+    bulk_path.write_text(json.dumps({"organisation_number": VALID_ORG, "name": "Example AS", "legal_form": "AS"}) + "\n", encoding="utf-8")
+    report_path = tmp_path / "report.json"
+    command = [
+        sys.executable,
+        str(ROOT / "scripts" / "run_batch.py"),
+        "--input", str(input_path),
+        "--bulk", str(bulk_path),
+        "--profiles-output", str(tmp_path / "profiles.jsonl"),
+        "--output", str(tmp_path / "envelopes.jsonl"),
+        "--report", str(report_path),
+        "--run-id", "local-attribution",
+        "--modules", "registry_live,hiring,activity",
+        "--max-requests", "0",
+        "--deadline-seconds", "15",
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, check=True)
+    assert json.loads(result.stdout)["validation"]["passed"] is True
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["module_operations"]["hiring"]["local_tasks"] == 1
+    assert report["module_operations"]["activity"]["local_tasks"] == 1
+    assert report["module_operations"]["hiring"]["requests"] == 0
+    assert report["request_attribution"]["reconciled"] is True
+
+
 def test_viewer_escapes_fetched_text_and_builds_compare_and_changes(tmp_path: Path):
     row = build_contract_envelope(_profile(), run_id="run-1", started_at="2026-10-02T00:00:00Z", completed_at="2026-10-02T00:00:01Z", requested_modules=["registry"])
     row["identity"]["name"] = "<img src=x onerror=alert(1)>"

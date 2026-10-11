@@ -75,6 +75,18 @@ def test_redirects_and_retries_are_charged_before_every_attempt(server, monkeypa
     assert budget.report()["outbound_requests"] == 4
 
 
+def test_request_reservations_attribute_attempts_to_the_active_module(server):
+    url, _ = server
+    budget = RunBudget(max_requests=2, modules=("website", "financials"))
+    with request_scope(budget, module="website"):
+        assert fetch_json(url + "/ok", attempts=1).status == 200
+    with request_scope(budget, module="financials"):
+        assert fetch_json(url + "/ok", attempts=1).status == 200
+    assert budget.module_requests[budget.module_indices["website"]] == 1
+    assert budget.module_requests[budget.module_indices["financials"]] == 1
+    assert budget.unattributed_requests.value == 0
+
+
 def test_robots_requests_use_the_shared_gate(server, monkeypatch):
     from norway_company_agent.website import _robots_allowed
     url, counts = server

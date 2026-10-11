@@ -19,7 +19,7 @@ preserves Unicode line separators inside captured page text.
 
 | Check | Result |
 |---|---|
-| Full test suite on current tree | 132 passed, 5 subtests passed |
+| Full test suite at this checkpoint | 132 passed, 5 subtests passed |
 | Matching 1,000-company run | 1,000 available envelopes, 0 requests, validation passed |
 | Matching 1,100-company run | 1,100 available envelopes, 0 requests, validation passed |
 | Universe attribution | 411,160 rows; SHA-256 `b82d6a3e7231d1759a958c282bc4366b80ec2fab8095053d8ed7fa9cd01bc838` |
@@ -36,8 +36,11 @@ coverage reports remain `bounded-smoke-100.md` and
 `coverage-follow-up-100.md`.
 
 The clean-clone verification at `c19fb4b` covered the preceding 131-test tree.
-The current pushed tree adds the checkpoint-audit regression test and passes the
-full 132-test suite locally.
+The `873ade5` tree added the checkpoint-audit regression test and passed the
+full 132-test suite locally. A later credential-free follow-up adds local signal
+extraction and module-attribution tests; its 135-test result is recorded in
+`reports/coverage-allocation-100.md` and is not a replacement for this dated
+historical conformance table.
 
 The saved-response scalability check used a temporary synthetic response map
 solely to exercise the supplied-response interface at 1,000 companies. Its

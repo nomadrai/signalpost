@@ -19,7 +19,7 @@ def enrich_module(task: dict, shared: tuple) -> dict:
     profile = task["profile"]
     started = time.monotonic()
     with request_scope(budget, company_index=task["company_index"],
-                       deadline=task["deadline"], max_requests=task["request_limit"]) as scope:
+                       deadline=task["deadline"], max_requests=task["request_limit"], module=module) as scope:
         if module in {"website", "website_discovery"}:
             plan = website_candidates(profile, derived=module == "website_discovery")
             previous = profile.get("evidence", {}).get("website")

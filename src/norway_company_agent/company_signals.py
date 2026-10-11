@@ -85,7 +85,10 @@ def extract_company_signals(profile: dict, website: dict) -> dict[str, dict]:
     seen = set()
     for page in value.get("pages") or []:
         document = page.get("source_document") or {}
-        if not document or not page.get("body_gzip_base64"):
+        # The bounded runner drops compressed bodies after capturing the replay
+        # document. That document and its source hash still support extraction
+        # during later field passes and checkpoint replay.
+        if not document or not page.get("content_sha256"):
             continue
         page_host = (urllib.parse.urlparse(page.get("url") or "").hostname or "").casefold().removeprefix("www.")
         if page_host != home_host:

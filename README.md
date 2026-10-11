@@ -77,7 +77,7 @@ uv run python scripts/run_competition_batch.py \
 uv run --with pytest pytest -q
 ```
 
-The current pushed tree was verified on October 11, 2026 with 132 tests and 5 subtests, followed by deterministic 1,000/1,100-company matching-universe checks that emitted every terminal envelope with zero outbound requests. The pinned clean clone at the release-conformance checkpoint reproduced the preceding 131-test result; the current tree adds the network-free checkpoint-audit regression coverage. The earlier published archive check was 104 tests and 5 subtests plus a one-company live BRREG smoke run.
+The current follow-up tree was verified on October 11, 2026 with 135 tests and 5 subtests, followed by deterministic 1,000/1,100-company matching-universe checks that emitted every terminal envelope with zero outbound requests. The pinned clean clone at the release-conformance checkpoint reproduced the preceding 131-test result; the current follow-up adds checkpoint-audit, local signal-extraction and module-attribution regression coverage. The earlier published archive check was 104 tests and 5 subtests plus a one-company live BRREG smoke run.
 
 Increase `--count` and `--expected-count` together for a larger local test. The 100-row smoke test above is practice only; Builderr supplies the companies for every official run.
 
@@ -148,7 +148,7 @@ python scripts/check_batch_limits.py \
   --output-dir <runs>/budget-conformance
 ```
 
-See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results.
+See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, and `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior.
 
 Audit a retained checkpoint without resuming it or making network requests:
 

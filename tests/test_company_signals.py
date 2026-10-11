@@ -64,6 +64,15 @@ def test_extracts_only_first_party_dated_hiring_and_activity_with_replayable_loc
     assert hiring_claim["effective_date"] == "2026-08-01"
 
 
+def test_signal_extraction_uses_replay_document_without_retaining_compressed_body():
+    page = _page()
+    page.pop("body_gzip_base64")
+    profile = _profile([page])
+    records = extract_company_signals(profile, profile["evidence"]["website"])
+    assert records["hiring"]["status"] == "available"
+    assert records["hiring"]["value"]["items"][0]["value"]["title"] == "Senior engineer"
+
+
 @pytest.mark.parametrize("page", [_page(expired=True), _page(foreign=True)])
 def test_rejects_expired_or_off_host_job_facts(page):
     profile = _profile([page])

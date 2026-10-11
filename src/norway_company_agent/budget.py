@@ -88,7 +88,8 @@ class RunBudget:
 
     def __init__(self, *, max_requests: int = 2000, deadline: float = math.inf,
                  companies: int = 0, governor: BudgetGovernor | None = None,
-                 context=None, ledger_path: str | None = None, run_id: str | None = None):
+                 context=None, ledger_path: str | None = None, run_id: str | None = None,
+                 modules: tuple[str, ...] = ()):
         context = context or multiprocessing.get_context("spawn")
         governor = governor or BudgetGovernor()
         self.max_requests = max(0, int(max_requests))
@@ -102,6 +103,11 @@ class RunBudget:
         self.run_id = run_id
         self.requests = context.Value("q", 0, lock=False)
         self.company_requests = context.Array("q", companies, lock=False)
+        # Invocation-local attribution is separate from the cumulative quota
+        # restored on resume. Charge it before a response can be lost to timeout.
+        self.module_indices = {name: index for index, name in enumerate(dict.fromkeys(modules))}
+        self.module_requests = context.Array("q", len(self.module_indices), lock=False)
+        self.unattributed_requests = context.Value("q", 0, lock=False)
         self.llm_calls = context.Value("q", 0, lock=False)
         self.llm_tokens = context.Value("q", 0, lock=False)
         self.search_calls = context.Value("q", 0, lock=False)
@@ -125,7 +131,7 @@ class RunBudget:
             raise ValueError("Provider cost must be finite and nonnegative")
         return int((Decimal(str(value)) * 1_000_000).to_integral_value(rounding=ROUND_CEILING))
 
-    def reserve_request(self, company_index: int | None = None) -> None:
+    def reserve_request(self, company_index: int | None = None, *, module: str | None = None) -> None:
         # A terminated process can leave a multiprocessing lock held. Refuse
         # attempts rather than waiting indefinitely on an abandoned gate.
         if not self.lock.acquire(timeout=max(0.001, min(1.0, self.deadline - time.monotonic()))):
@@ -137,10 +143,14 @@ class RunBudget:
                 raise BudgetExceeded("outbound_request_cap")
             self._record(outbound_requests=self.requests.value + 1,
                          remaining_outbound_requests=self.max_requests - self.requests.value - 1,
-                         company_index=company_index)
+                         company_index=company_index, module=module)
             self.requests.value += 1
             if company_index is not None:
                 self.company_requests[company_index] += 1
+            if module in self.module_indices:
+                self.module_requests[self.module_indices[module]] += 1
+            else:
+                self.unattributed_requests.value += 1
         finally:
             self.lock.release()
 
@@ -199,6 +209,7 @@ class RequestScope:
     company_index: int | None
     deadline: float
     max_requests: int
+    module: str | None = None
     requests: int = 0
 
 
@@ -207,8 +218,9 @@ _scope: ContextVar[RequestScope | None] = ContextVar("outbound_request_scope", d
 
 @contextmanager
 def request_scope(budget: RunBudget, *, company_index: int | None = None,
-                  deadline: float = math.inf, max_requests: int = 2000):
-    token = _scope.set(RequestScope(budget, company_index, min(deadline, budget.deadline), max_requests))
+                  deadline: float = math.inf, max_requests: int = 2000,
+                  module: str | None = None):
+    token = _scope.set(RequestScope(budget, company_index, min(deadline, budget.deadline), max_requests, module))
     try:
         yield _scope.get()
     finally:
@@ -227,7 +239,7 @@ def reserve_http_attempt(url: str = "") -> None:
         bounded_sleep(scope.budget.reserve_history_start())
         if time.monotonic() >= scope.deadline:
             raise BudgetExceeded("company_deadline")
-    scope.budget.reserve_request(scope.company_index)
+    scope.budget.reserve_request(scope.company_index, module=scope.module)
     scope.requests += 1
 
 

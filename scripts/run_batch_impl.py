@@ -281,7 +281,8 @@ def main() -> None:
     context = multiprocessing.get_context("fork" if os.name == "posix" else "spawn")
     budget = RunBudget(max_requests=args.max_requests, deadline=stop_scheduling_at,
                        companies=len(orgs), governor=governor, context=context,
-                       ledger_path=str(output_path.with_suffix(output_path.suffix + ".budget.jsonl")), run_id=args.run_id)
+                       ledger_path=str(output_path.with_suffix(output_path.suffix + ".budget.jsonl")), run_id=args.run_id,
+                       modules=tuple(requested_modules))
     resume_budget_unknown = False
     if args.resume and prior_profiles:
         report_path = Path(args.report)
@@ -313,6 +314,12 @@ def main() -> None:
     completed_tasks = 0
     skipped_tasks = 0
     priority = ["registry_live", "website", "financials", "roles", "hiring", "activity", "website_discovery", "locations", "group", "financial_history"]
+    module_operations = {
+        module: {"planned_tasks": 0, "started_tasks": 0, "completed_tasks": 0,
+                 "failed_tasks": 0, "skipped_tasks": 0, "skip_reasons": Counter(),
+                 "local_tasks": 0, "snapshot_reads": 0, "bytes": 0, "runtime_ms": 0.0}
+        for module in priority if module in requested_modules
+    }
     tasks = []
     for module in priority:
         if module not in requested_modules:
@@ -322,12 +329,14 @@ def main() -> None:
                 continue
             saved = module not in {"website", "website_discovery", "hiring", "activity"} and official_endpoints(org)[module][0] in saved_responses.get("responses", {})
             tasks.append({"module": module, "organisation_number": org, "company_index": index, "saved": saved})
+            module_operations[module]["planned_tasks"] += 1
     # Supplied responses require no live requests and precede all network work.
     tasks.sort(key=lambda task: not task["saved"])
     workers = max(1, int(args.workers))
     pool = BoundedWorkers(enrich_module, (budget, saved_responses), workers, context=context)
     pending_index = 0
     dirty = set()
+    active_module = None
 
     def skip(task, reason):
         nonlocal skipped_tasks
@@ -336,6 +345,8 @@ def main() -> None:
         profiles[org].setdefault("evidence", {})[module] = evidence(module, "not_fetched", source_type, url, note=reason)
         skipped_orgs.add(org)
         skipped_tasks += 1
+        module_operations[module]["skipped_tasks"] += 1
+        module_operations[module]["skip_reasons"][reason] += 1
         code = "deadline_pass2_skipped" if reason == "run_deadline" else "request_budget_exhausted"
         if not any(item["code"] == code for item in errors_by_org.get(org, [])):
             errors_by_org.setdefault(org, []).append(_error(code, reason, "pass2"))
@@ -346,39 +357,55 @@ def main() -> None:
                 break
             while pending_index < len(tasks) and pool.active < workers and time.monotonic() < stop_scheduling_at:
                 task = dict(tasks[pending_index])
+                # Finish and merge a field family before dependent tasks read
+                # its evidence. This matters for small batches with spare slots.
+                if pool.active and task["module"] != active_module:
+                    break
                 pending_index += 1
                 org = task["organisation_number"]
+                module = task["module"]
                 if task["module"] == "website" and not profiles[org].get("website"):
                     profiles[org].setdefault("evidence", {})["website"] = evidence("website", "not_found", "registry_linked_company_website", "https://data.brreg.no/enhetsregisteret/api/enheter", note="No website candidate in the supplied identity snapshot")
                     completed_orgs.add(org)
                     completed_tasks += 1
+                    module_operations[module]["local_tasks"] += 1
+                    module_operations[module]["completed_tasks"] += 1
                     dirty.add(org)
                     continue
-                if not task["saved"] and (budget.requests.value >= budget.max_requests or resume_budget_unknown):
+                local_extraction = module in {"hiring", "activity"}
+                if not task["saved"] and not local_extraction and (budget.requests.value >= budget.max_requests or resume_budget_unknown):
                     skip(task, "resume_budget_unknown" if resume_budget_unknown else "outbound_request_cap")
                     continue
                 task["profile"] = profiles[org]
                 task["deadline"] = min(stop_scheduling_at, time.monotonic() + company_timeout)
-                task["request_limit"] = 4 if task["module"] in {"website", "website_discovery"} else 2
+                task["request_limit"] = 0 if local_extraction else 4 if module in {"website", "website_discovery"} else 2
                 pool.submit(task, company_timeout)
+                active_module = module
+                module_operations[module]["started_tasks"] += 1
+                if local_extraction:
+                    module_operations[module]["local_tasks"] += 1
             if not pool.active:
                 break
             for task, ok, result in pool.poll(min(0.1, max(0, stop_scheduling_at - time.monotonic()))):
                 org, module = task["organisation_number"], task["module"]
+                module_metric = module_operations[module]
                 if ok:
                     profiles[org].setdefault("evidence", {}).update(result["records"])
                     metric = profiles[org]["run_metrics"]
                     for key in ("bytes", "runtime_ms", "snapshot_reads"):
                         metric[key] += result["metric"].get(key, 0)
+                        module_metric[key] += result["metric"].get(key, 0)
                     metric["latencies_ms"].extend(result["metric"].get("latencies_ms", []))
                     completed_orgs.add(org)
                     completed_tasks += 1
+                    module_metric["completed_tasks"] += 1
                 else:
                     url, source_type = (profiles[org].get("website") or "", "registry_linked_company_website") if module in {"website", "website_discovery", "hiring", "activity"} else official_endpoints(org)[module]
                     transient = str(result) in {"company_timeout", "worker_exit"} or "BudgetExceeded" in str(result)
                     profiles[org].setdefault("evidence", {})[module] = evidence(module, "not_fetched" if transient else "source_error", source_type, url, note=str(result))
                     errors_by_org.setdefault(org, []).append(_error("company_enrichment_failed", f"{module}: {result}", "pass2"))
                     pass2_errors += 1
+                    module_metric["failed_tasks"] += 1
                 profiles[org]["run_metrics"]["requests"] = budget.company_requests[task["company_index"]]
                 dirty.add(org)
             if len(dirty) >= max(1, args.checkpoint_every):
@@ -438,6 +465,16 @@ def main() -> None:
     operations["requests"] = budget.requests.value - initial_requests
     operations["snapshot_reads"] = sum(profile.get("run_metrics", {}).get("snapshot_reads", 0) for profile in profiles.values())
     operations["third_party_cost_usd"] = budget.report()["cost_usd"]
+    for module, metric in module_operations.items():
+        metric["requests"] = budget.module_requests[budget.module_indices[module]]
+        metric["runtime_ms"] = round(metric["runtime_ms"], 3)
+    attributed_requests = sum(metric["requests"] for metric in module_operations.values())
+    request_attribution = {
+        "scope": "current_invocation",
+        "attributed_requests": attributed_requests,
+        "unattributed_requests": budget.unattributed_requests.value,
+        "reconciled": attributed_requests + budget.unattributed_requests.value == operations["requests"],
+    }
     validation = validate_envelopes(final_envelopes, expected_count)
     report = {
         "schema_version": "1.0",
@@ -471,6 +508,8 @@ def main() -> None:
             "local_snapshot_uri": bulk_path.resolve().as_uri(),
         },
         "operations": operations,
+        "module_operations": module_operations,
+        "request_attribution": request_attribution,
         "budget": budget.report(),
         "request_ledger": budget.ledger_path,
         "validation": validation,

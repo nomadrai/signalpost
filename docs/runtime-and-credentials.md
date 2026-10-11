@@ -68,6 +68,11 @@ They default to zero. A new connector needs explicit pricing, a model/version
 where applicable, timeouts, usage reporting and a deterministic fallback. Search
 and model calls share the monetary cap and consume the common HTTP-attempt budget.
 
+The bounded report now attributes HTTP attempts and local tasks to each requested
+field family. This prevents an aggregate no-improvement result from being
+misread when a later strategy received no attempts because earlier field families
+exhausted the allowance.
+
 Real keys belong in the backend process environment, never generated HTML or
 browser JavaScript. `.env.example` lists configuration names; the runner reads
 process environment variables and does not automatically load a `.env` file.
