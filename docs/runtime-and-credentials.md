@@ -79,4 +79,4 @@ process environment variables and does not automatically load a `.env` file.
 
 The release install uses `uv sync --locked --python 3.12`; `uv run --no-sync`
 then executes the already-installed locked environment without rewriting the
-lockfile.
+lockfile. Runtime candidate `b4b7cd9` passed this procedure.

@@ -9,7 +9,7 @@ score.
 ## Current candidate
 
 - Repository: `https://github.com/nomadrai/signalpost`
-- Candidate revision verified locally: `3c5c88f`
+- Runtime candidate revision verified locally: `b4b7cd9`
 - Runtime: Python 3.12+
 - Dependency installer: `uv`
 - Default models: none
@@ -23,6 +23,7 @@ From a fresh clone at the exact candidate revision:
 ```bash
 git clone https://github.com/nomadrai/signalpost.git
 cd signalpost
+git checkout b4b7cd9
 uv sync --locked --python 3.12
 ```
 
@@ -60,20 +61,20 @@ current candidate was:
 uv run --no-sync python scripts/run_competition_batch.py \
   --organisations ROOT/runs/phase0/baseline-organisations.jsonl \
   --bulk ROOT/signalpost-company-universe-2025.jsonl/financial-filer-master-2025.jsonl \
-  --profiles-output ROOT/runs/final-smoke-3c5c88f/profiles.jsonl \
-  --output ROOT/runs/final-smoke-3c5c88f/envelopes.jsonl \
-  --report ROOT/runs/final-smoke-3c5c88f/report.json \
-  --run-id final-smoke-3c5c88f \
+  --profiles-output ROOT/runs/final-smoke-b4b7cd9/profiles.jsonl \
+  --output ROOT/runs/final-smoke-b4b7cd9/envelopes.jsonl \
+  --report ROOT/runs/final-smoke-b4b7cd9/report.json \
+  --run-id final-smoke-b4b7cd9 \
   --expected-count 100 \
   --workers 8 \
   --deadline-seconds 180 \
   --max-requests 200
 ```
 
-The current clean-clone measurement produced 100/100 terminal envelopes in
-84.930 seconds, used 200/200 reserved HTTP attempts, declared USD 0, passed
+The current clean-clone measurement at `b4b7cd9` produced 100/100 terminal
+envelopes in 70.473 seconds, used 200/200 reserved HTTP attempts, declared USD 0, passed
 structural validation, and reconciled all requests to field families with zero
-unattributed attempts. See `reports/final-candidate-smoke-3c5c88f.md`.
+unattributed attempts. See `reports/final-candidate-smoke-b4b7cd9.md`.
 
 ## Tests and network-free checks
 
