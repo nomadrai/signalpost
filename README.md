@@ -43,7 +43,7 @@ Requires Python 3.12+ and `uv`. This step downloads data and makes live requests
 The manifest selector can create a local test batch of any size. Use 100 rows for the recommended smoke test before trying a larger batch.
 
 ```bash
-uv sync
+uv sync --locked --python 3.12
 curl -L 'https://data.brreg.no/enhetsregisteret/api/enheter/lastned/csv' -o brreg-enheter.csv
 curl -L 'https://builderr.ai/signalpost-company-universe-2025.jsonl.gz' -o signalpost-universe.jsonl.gz
 
@@ -74,10 +74,10 @@ uv run python scripts/run_competition_batch.py \
   --run-id local-001 \
   --expected-count 1000
 
-uv run --with pytest pytest -q
+uv run --no-sync --with pytest pytest -q
 ```
 
-The current follow-up tree was verified on October 11, 2026 with 135 tests and 5 subtests, followed by deterministic 1,000/1,100-company matching-universe checks that emitted every terminal envelope with zero outbound requests. The pinned clean clone at the release-conformance checkpoint reproduced the preceding 131-test result; the current follow-up adds checkpoint-audit, local signal-extraction and module-attribution regression coverage. The earlier published archive check was 104 tests and 5 subtests plus a one-company live BRREG smoke run.
+The current follow-up tree was verified on October 11, 2026 with 135 tests and 5 subtests, followed by deterministic 1,000/1,100-company matching-universe checks that emitted every terminal envelope with zero outbound requests. The current candidate also passed a fresh clean-clone install with `uv sync --locked --python 3.12` and the exact competition-compatible smoke command. The earlier published archive check was 104 tests and 5 subtests plus a one-company live BRREG smoke run.
 
 Increase `--count` and `--expected-count` together for a larger local test. The 100-row smoke test above is practice only; Builderr supplies the companies for every official run.
 
@@ -148,7 +148,7 @@ python scripts/check_batch_limits.py \
   --output-dir <runs>/budget-conformance
 ```
 
-See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, and `reports/discovery-allocation-100.md` for the opt-in website-discovery measurement.
+See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, `reports/discovery-allocation-100.md` for the opt-in website-discovery measurement, and `docs/submission.md` for the candidate command and declarations.
 
 Audit a retained checkpoint without resuming it or making network requests:
 

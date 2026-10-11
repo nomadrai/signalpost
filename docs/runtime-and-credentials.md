@@ -76,3 +76,7 @@ exhausted the allowance.
 Real keys belong in the backend process environment, never generated HTML or
 browser JavaScript. `.env.example` lists configuration names; the runner reads
 process environment variables and does not automatically load a `.env` file.
+
+The release install uses `uv sync --locked --python 3.12`; `uv run --no-sync`
+then executes the already-installed locked environment without rewriting the
+lockfile.
