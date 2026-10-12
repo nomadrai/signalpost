@@ -32,7 +32,7 @@ and any provider provisioning details still need confirmation for deployment.
 | Find an existing company by name/number | Static viewer filters generated cards in the browser | None |
 | Research a company from its number | Batch runner reads the identity snapshot, calls public official endpoints and crawls candidate company pages | No model or paid-search key in the default path |
 | Discover candidates through a web search service | Standalone Brave experiment; not integrated into the bounded batch | `BRAVE_SEARCH_API_KEY` for that script |
-| Interpret flexible questions or generate model-assisted summaries | No hosted-model connector in the main batch; current answers/synthesis use deterministic rules | A provider credential would be needed when making a hosted-model call |
+| Interpret flexible questions or generate model-assisted summaries | Optional OpenAI-compatible evidence mode; current answers/synthesis remain deterministic | `SIGNALPOST_MODEL_API_KEY` only when `--model-assist` is enabled |
 
 The static viewer does not submit new crawl jobs when a visitor types a company
 number. On-demand research from the UI would need a backend job endpoint and
@@ -57,16 +57,46 @@ called, for example after fetching evidence for extraction or after validating
 claims for synthesis. A future natural-language query planner could call a model
 earlier, before retrieval. Exact-company publication remains deterministic.
 
+### GPT-assisted evidence mode
+
+The repository includes an optional OpenAI-compatible evidence assistant. Enable
+it explicitly with `--model-assist`. The model receives only replayable pages
+already fetched from a verified first-party company site and proposes hiring or
+dated-activity items. Deterministic validation requires the retained page URL,
+exact content hash, same-host item URL, source date and a verbatim evidence quote
+before a claim can enter the envelope. Page content is treated as untrusted data,
+not as instructions to the model.
+
+Example configuration for an OpenAI-compatible provider:
+
+```bash
+export SIGNALPOST_MODEL_API_KEY='...'
+export SIGNALPOST_MODEL_ENDPOINT='https://api.openai.com/v1/chat/completions'
+export SIGNALPOST_MODEL='openai/gpt-oss-120b'
+export MAX_LLM_CALLS=100
+export MAX_LLM_TOKENS=250000
+export MAX_COST_USD=10
+export SIGNALPOST_MODEL_COST_PER_CALL_USD=0
+```
+
+Use the actual provider endpoint and model identifier. Set
+`SIGNALPOST_MODEL_COST_PER_CALL_USD` to a conservative upper bound when calls
+are billable. Each model request reserves one outbound HTTP attempt and appears
+under `model_signals` in the run report. Missing credentials, zero allowances,
+timeouts or invalid JSON fall back to explicit unavailable states and never
+fabricate a claim.
+
 The existing Brave script is a separate experiment. It must be integrated with
 the shared HTTP request ledger, monetary reservations, deadlines and terminal
 output before becoming part of the default bounded run. Setting its environment
 variable alone does not add search to `run_batch.py`.
 
-`MAX_LLM_CALLS`, `MAX_LLM_TOKENS`, `MAX_SEARCH_CALLS` and `MAX_COST_USD` currently
-configure allowance/reservation machinery; they do not instantiate providers.
-They default to zero. A new connector needs explicit pricing, a model/version
-where applicable, timeouts, usage reporting and a deterministic fallback. Search
-and model calls share the monetary cap and consume the common HTTP-attempt budget.
+`MAX_LLM_CALLS`, `MAX_LLM_TOKENS`, `MAX_SEARCH_CALLS` and `MAX_COST_USD` configure
+allowance/reservation machinery. They default to zero. A provider key alone does
+not enable model calls; `--model-assist` and positive allowances are required.
+A new connector needs explicit pricing, a model/version where applicable,
+timeouts, usage reporting and a deterministic fallback. Search and model calls
+share the monetary cap and consume the common HTTP-attempt budget.
 
 The bounded report now attributes HTTP attempts and local tasks to each requested
 field family. This prevents an aggregate no-improvement result from being

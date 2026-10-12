@@ -34,6 +34,7 @@ from norway_company_agent.enrichment import enrich_module  # noqa: E402
 from norway_company_agent.official import official_endpoints  # noqa: E402
 from norway_company_agent.sampling import iter_bulk, snapshot_sha256 as hash_snapshot  # noqa: E402
 from norway_company_agent.workers import BoundedWorkers  # noqa: E402
+from norway_company_agent.llm import ModelConfig  # noqa: E402
 
 
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -165,6 +166,7 @@ def main() -> None:
     parser.add_argument("--response-snapshot", help="Saved official responses: JSON object with a responses URL map")
     parser.add_argument("--modules", default="registry,accounting_obligation,registry_live,financials,roles,group,locations,website,hiring,activity")
     parser.add_argument("--discover-websites", action="store_true", help="Try conservative legal-name domain candidates after the registry website")
+    parser.add_argument("--model-assist", action="store_true", help="Use an optional OpenAI-compatible model only on retained exact-company page captures")
     args = parser.parse_args()
 
     started_at = utc_now()
@@ -191,10 +193,14 @@ def main() -> None:
     requested_modules = [item.strip() for item in args.modules.split(",") if item.strip()]
     if args.discover_websites and "website_discovery" not in requested_modules:
         requested_modules.append("website_discovery")
+    if args.model_assist and "model_signals" not in requested_modules:
+        requested_modules.append("model_signals")
     allowed_modules = {"registry", "accounting_obligation", "website", "website_discovery", "hiring", "activity", *official_endpoints("000000000")}
+    allowed_modules.add("model_signals")
     if set(requested_modules) - allowed_modules:
         parser.error(f"Unknown modules: {sorted(set(requested_modules) - allowed_modules)}")
     previous_profiles, previous_run_id = _load_previous_profiles(Path(args.previous_output) if args.previous_output else None)
+    model_config = ModelConfig.from_environment()
     output_path = Path(args.output)
     profiles_path = Path(args.profiles_output)
 
@@ -313,7 +319,7 @@ def main() -> None:
     pass2_errors = 0
     completed_tasks = 0
     skipped_tasks = 0
-    priority = ["registry_live", "website", "financials", "roles", "hiring", "activity", "website_discovery", "locations", "group", "financial_history"]
+    priority = ["registry_live", "website", "financials", "roles", "hiring", "activity", "website_discovery", "model_signals", "locations", "group", "financial_history"]
     module_operations = {
         module: {"planned_tasks": 0, "started_tasks": 0, "completed_tasks": 0,
                  "failed_tasks": 0, "skipped_tasks": 0, "skip_reasons": Counter(),
@@ -327,7 +333,7 @@ def main() -> None:
         for index, org in enumerate(orgs):
             if org not in found or profile_complete_for_modules(profiles[org], [module]):
                 continue
-            saved = module not in {"website", "website_discovery", "hiring", "activity"} and official_endpoints(org)[module][0] in saved_responses.get("responses", {})
+            saved = module not in {"website", "website_discovery", "hiring", "activity", "model_signals"} and official_endpoints(org)[module][0] in saved_responses.get("responses", {})
             tasks.append({"module": module, "organisation_number": org, "company_index": index, "saved": saved})
             module_operations[module]["planned_tasks"] += 1
     # Supplied responses require no live requests and precede all network work.
@@ -341,13 +347,22 @@ def main() -> None:
     def skip(task, reason):
         nonlocal skipped_tasks
         org, module = task["organisation_number"], task["module"]
-        url, source_type = (profiles[org].get("website") or "https://data.brreg.no/enhetsregisteret/api/enheter", "registry_linked_company_website") if module in {"website", "website_discovery", "hiring", "activity"} else official_endpoints(org)[module]
+        if module in {"website", "website_discovery", "hiring", "activity"}:
+            url, source_type = profiles[org].get("website") or "https://data.brreg.no/enhetsregisteret/api/enheter", "registry_linked_company_website"
+        elif module == "model_signals":
+            url, source_type = "", "model_assisted_extraction"
+        else:
+            url, source_type = official_endpoints(org)[module]
         profiles[org].setdefault("evidence", {})[module] = evidence(module, "not_fetched", source_type, url, note=reason)
         skipped_orgs.add(org)
         skipped_tasks += 1
         module_operations[module]["skipped_tasks"] += 1
         module_operations[module]["skip_reasons"][reason] += 1
-        code = "deadline_pass2_skipped" if reason == "run_deadline" else "request_budget_exhausted"
+        code = (
+            "deadline_pass2_skipped" if reason == "run_deadline"
+            else "model_assist_skipped" if reason.startswith("model_")
+            else "request_budget_exhausted"
+        )
         if not any(item["code"] == code for item in errors_by_org.get(org, [])):
             errors_by_org.setdefault(org, []).append(_error(code, reason, "pass2"))
 
@@ -364,6 +379,15 @@ def main() -> None:
                 pending_index += 1
                 org = task["organisation_number"]
                 module = task["module"]
+                if module == "model_signals":
+                    website = profiles[org].get("evidence", {}).get("website") or {}
+                    assessment = (website.get("value") or {}).get("identity_assessment") or {}
+                    if not model_config.configured:
+                        skip(task, "model_not_configured")
+                        continue
+                    if website.get("status") != "available" or not assessment.get("publishable"):
+                        skip(task, "model_no_verified_website")
+                        continue
                 if task["module"] == "website" and not profiles[org].get("website"):
                     profiles[org].setdefault("evidence", {})["website"] = evidence("website", "not_found", "registry_linked_company_website", "https://data.brreg.no/enhetsregisteret/api/enheter", note="No website candidate in the supplied identity snapshot")
                     completed_orgs.add(org)
@@ -379,6 +403,17 @@ def main() -> None:
                 task["profile"] = profiles[org]
                 task["deadline"] = min(stop_scheduling_at, time.monotonic() + company_timeout)
                 task["request_limit"] = 0 if local_extraction else 4 if module in {"website", "website_discovery"} else 2
+                if module == "model_signals":
+                    task["request_limit"] = 1
+                    task["model_config"] = {
+                        "api_key": model_config.api_key,
+                        "endpoint": model_config.endpoint,
+                        "model": model_config.model,
+                        "timeout_seconds": model_config.timeout_seconds,
+                        "max_input_chars": model_config.max_input_chars,
+                        "max_output_tokens": model_config.max_output_tokens,
+                        "cost_per_call_usd": model_config.cost_per_call_usd,
+                    }
                 pool.submit(task, company_timeout)
                 active_module = module
                 module_operations[module]["started_tasks"] += 1
@@ -400,7 +435,12 @@ def main() -> None:
                     completed_tasks += 1
                     module_metric["completed_tasks"] += 1
                 else:
-                    url, source_type = (profiles[org].get("website") or "", "registry_linked_company_website") if module in {"website", "website_discovery", "hiring", "activity"} else official_endpoints(org)[module]
+                    if module in {"website", "website_discovery", "hiring", "activity"}:
+                        url, source_type = profiles[org].get("website") or "", "registry_linked_company_website"
+                    elif module == "model_signals":
+                        url, source_type = "", "model_assisted_extraction"
+                    else:
+                        url, source_type = official_endpoints(org)[module]
                     transient = str(result) in {"company_timeout", "worker_exit"} or "BudgetExceeded" in str(result)
                     profiles[org].setdefault("evidence", {})[module] = evidence(module, "not_fetched" if transient else "source_error", source_type, url, note=str(result))
                     errors_by_org.setdefault(org, []).append(_error("company_enrichment_failed", f"{module}: {result}", "pass2"))

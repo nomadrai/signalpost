@@ -136,6 +136,7 @@ The supported terminal states are `available`, `not_available`, `blocked`, `not_
 - The default shared cap is **2,000 outbound HTTP attempts**. `--max-requests` or `MAX_OUTBOUND_REQUESTS` can lower it. Failed requests, retries, redirects, and robots fetches all reserve a slot before transport. The append-only `<output>.budget.jsonl` ledger records reservations before sending. Domain parsing uses the bundled suffix list and performs no hidden suffix-list download.
 - Saved official responses are consumed first when supplied. Live field-family priority is identity, registry-listed websites, accounts, roles, hiring/activity, opt-in website discovery, workplaces, group, and account history. Websites get at most four attempts per task; official modules get at most two, including retries/redirects. Account-history starts retain a shared 2.1-second minimum interval. Unattempted fields have explicit `not_available` states and budget/deadline reasons; an identity-backed result can still be `available`. Conservative legal-name domain discovery is opt-in with `--discover-websites`; it runs after the stronger default fields and is not a search-provider or model integration.
 - `--response-snapshot <responses.json>` accepts a saved JSON object with `retrieved_at`, optional `effective_at`, and a `responses` map keyed by official URL. Each value has `status`, and either `body` or `raw_json`. Saved responses are consumed first, retain their source timestamps/hashes, count as `snapshot_reads`, and consume no outbound requests. Missing saved responses may use live HTTP within the cap.
+- `--model-assist` enables the optional OpenAI-compatible evidence assistant. It requires `SIGNALPOST_MODEL_API_KEY`, a configured endpoint/model and positive `MAX_LLM_CALLS`, `MAX_LLM_TOKENS` and `MAX_COST_USD` allowances. The model sees only retained exact-company page captures; its output must pass deterministic URL/hash/date/quote validation before publication. Without these settings the run remains deterministic and key-free.
 - Normalized universe JSONL is attributed to its published universe source, its exact supplied byte hash, and its local file identifier. It supports identity and the latest-filing-year flag; it supplies no financial amounts, roles, or subunit responses. Local reads have no fabricated HTTP status.
 - Monetary reservations share one **USD 10 maximum** across search and models. `MAX_COST_USD` defaults to zero, and search/model call limits default to zero. The batch has no enabled paid connector. A monetary allowance alone enables no provider.
 - `--resume` reuses completed modules only when the identity snapshot hash matches, and carries forward the same run's request/cost reservations and elapsed time. If the previous run report is absent, live requests are refused because in-flight usage cannot be reconstructed reliably. Keep the same run ID and report path for a resumed run.
@@ -149,6 +150,10 @@ python scripts/check_batch_limits.py \
 ```
 
 See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, `reports/discovery-allocation-100.md` for the opt-in website-discovery measurement, `reports/final-candidate-smoke-b4b7cd9.md` for the current clean-clone smoke, and `docs/submission.md` for the candidate command and declarations.
+
+The optional model transport and deterministic evidence gate were exercised with
+a local provider fixture in `reports/model-assist-integration-100.md`. No real
+provider credential is stored in the repository.
 
 Audit a retained checkpoint without resuming it or making network requests:
 

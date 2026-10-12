@@ -10,6 +10,8 @@ from .website import fetch_website
 from .discovery import website_candidates
 from .company_signals import extract_company_signals
 from .evidence import evidence
+from .llm import ModelClient, ModelConfig
+from .model_signals import extract_model_signals
 
 
 def enrich_module(task: dict, shared: tuple) -> dict:
@@ -54,6 +56,11 @@ def enrich_module(task: dict, shared: tuple) -> dict:
         elif module in {"hiring", "activity"}:
             website = profile.get("evidence", {}).get("website") or {}
             records = extract_company_signals(profile, website)
+            metric = {"bytes": 0, "latencies_ms": [], "snapshot_reads": 0}
+        elif module == "model_signals":
+            website = profile.get("evidence", {}).get("website") or {}
+            config = ModelConfig(**(task.get("model_config") or {}))
+            records = extract_model_signals(profile, website, ModelClient(config, budget))
             metric = {"bytes": 0, "latencies_ms": [], "snapshot_reads": 0}
         else:
             kwargs = {"fetcher": SnapshotFetcher(saved_responses)} if task.get("saved") else {}

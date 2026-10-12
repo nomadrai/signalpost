@@ -107,4 +107,14 @@ Secrets: None required by the default batch; optional provider credentials are
 The standalone Brave experiment requires `BRAVE_SEARCH_API_KEY` but is not part
 of the default bounded command. A hosted AI model key is not needed unless an
 optional model connector is enabled; Builderr states that a scoring key can be
-requested if one is needed.
+requested if one is needed. The optional GPT-assisted command adds
+`--model-assist` after configuring `SIGNALPOST_MODEL_API_KEY`, the compatible
+endpoint/model, `MAX_LLM_CALLS`, `MAX_LLM_TOKENS`, `MAX_COST_USD` and the
+per-call upper-bound cost. The model only extracts claims from retained
+verified-site evidence; deterministic identity and publication gates remain in
+force.
+
+The model transport integration is covered by
+`reports/model-assist-integration-100.md`; that check uses a local provider
+fixture because no real credential is stored in the repository. The real model
+key must be injected into the evaluator environment.
