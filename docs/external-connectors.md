@@ -39,8 +39,17 @@ requirement):
 
 Any promoted search connector must also use the batch's shared request ledger,
 deadline supervisor and monetary reservation pool. `BRAVE_SEARCH_API_KEY` is
-only an environment variable for the standalone transient experiment until that
-integration is completed. A search key is not an AI model key.
+consumed by the explicit `--planner-assist` path only when the shared search
+allowance is positive; the standalone script remains available for experiments.
+The planner stores only a deterministic candidate URL after a transient search,
+then the normal crawler and exact-entity gate decide publication. A search key
+is not an AI model key.
+
+Groq GPT-OSS browser search is not treated as a replacement for this connector:
+the current Groq documentation states that browser search is incompatible with
+structured outputs and returns model-composed snippets. It can be evaluated as
+a separately declared provider feature after source-retention and evidence
+mapping are established.
 
 ## Norwegian company sentiment
 

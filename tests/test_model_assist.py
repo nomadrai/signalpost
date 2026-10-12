@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -11,6 +14,7 @@ from norway_company_agent.budget import RunBudget, request_scope  # noqa: E402
 from norway_company_agent.evidence import evidence  # noqa: E402
 from norway_company_agent.llm import ModelClient, ModelConfig  # noqa: E402
 from norway_company_agent.model_signals import extract_model_signals  # noqa: E402
+from norway_company_agent.planner import plan_next_action, validate_action  # noqa: E402
 from norway_company_agent.schema import build_contract_envelope, validate_claim_evidence  # noqa: E402
 
 
@@ -78,7 +82,7 @@ def test_model_client_respects_shared_model_budget(monkeypatch):
         def read(self, _limit):
             return json.dumps({"choices": [{"message": {"content": '{"items": []}'}}]}).encode()
 
-    monkeypatch.setattr("urllib.request.urlopen", lambda request, timeout: Response())
+    monkeypatch.setattr("norway_company_agent.llm.PROVIDER_OPENER.open", lambda request, timeout: Response())
     config = ModelConfig(api_key="test", endpoint="https://model.example/v1/chat/completions", model="test-model",
                          max_output_tokens=10, cost_per_call_usd=0.1)
     budget = RunBudget(max_requests=1, governor=type("Governor", (), {
@@ -90,3 +94,175 @@ def test_model_client_respects_shared_model_budget(monkeypatch):
     assert operation["status"] == "available"
     assert budget.report()["llm_calls"] == 1
     assert budget.report()["outbound_requests"] == 1
+
+
+def test_model_config_discovers_groq_key_pool(monkeypatch):
+    for name in ("SIGNALPOST_MODEL_API_KEYS", "SIGNALPOST_MODEL_API_KEY", "OPENAI_API_KEYS",
+                 "OPENAI_API_KEY", "AI_API_KEY", "SIGNALPOST_MODEL_ENDPOINT", "GROQ_BASE_URL"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("GROQ_API_KEYS", "groq-one, groq-two")
+    config = ModelConfig.from_environment()
+    assert config.credentials == ("groq-one", "groq-two")
+    assert config.endpoint == "https://api.groq.com/openai/v1/chat/completions"
+    assert config.model == "openai/gpt-oss-120b"
+
+
+def test_groq_gpt_oss_published_price_is_used_when_no_override_is_set():
+    config = ModelConfig(
+        api_key="test", endpoint="https://api.groq.com/openai/v1/chat/completions",
+        model="openai/gpt-oss-120b", max_output_tokens=1200,
+    )
+    assert config.reservation_cost_usd(4000) == (4000 * 0.15 + 1200 * 0.60) / 1_000_000
+
+
+def test_model_client_rotates_after_provider_rate_limit(monkeypatch):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self, _limit):
+            return json.dumps({"choices": [{"message": {"content": '{"items": []}'}}]}).encode()
+
+    requests = []
+    rate_limited = urllib.error.HTTPError(
+        "https://model.example/v1/chat/completions", 429, "Too Many Requests",
+        {"Retry-After": "1"}, io.BytesIO(b"rate limited")
+    )
+
+    def urlopen(request, timeout):
+        requests.append(request)
+        if len(requests) == 1:
+            raise rate_limited
+        return Response()
+
+    monkeypatch.setattr("norway_company_agent.llm.PROVIDER_OPENER.open", urlopen)
+    config = ModelConfig(api_key="key-one", api_keys=("key-two",),
+                         endpoint="https://model.example/v1/chat/completions", model="test-model",
+                         max_output_tokens=10)
+    budget = RunBudget(max_requests=2, governor=type("Governor", (), {
+        "max_llm_calls": 2, "max_llm_tokens": 1000, "max_search_calls": 0, "max_cost_usd": 1.0
+    })(), modules=("model_signals",), model_keys=config.credentials,
+                       model_requests_per_key=1000)
+    with request_scope(budget, module="model_signals", max_requests=2):
+        result, operation = ModelClient(config, budget).complete_json(system="Return JSON", user="{}")
+    assert result == {"items": []}
+    assert operation["attempts"] == 2
+    assert [request.get_header("Authorization") for request in requests] == [
+        "Bearer key-one", "Bearer key-two"
+    ]
+    assert budget.report()["outbound_requests"] == 2
+
+
+def test_groq_rate_limit_is_provider_wide_and_does_not_fail_over_to_another_key(monkeypatch):
+    error = urllib.error.HTTPError(
+        "https://api.groq.com/openai/v1/chat/completions", 429, "Too Many Requests",
+        {"retry-after": "10"}, io.BytesIO(b"rate limited")
+    )
+    monkeypatch.setattr("norway_company_agent.llm.PROVIDER_OPENER.open", lambda request, timeout: (_ for _ in ()).throw(error))
+    config = ModelConfig(
+        api_key="key-one", api_keys=("key-two",),
+        endpoint="https://api.groq.com/openai/v1/chat/completions",
+        model="openai/gpt-oss-120b", max_output_tokens=10,
+    )
+    budget = RunBudget(max_requests=2, governor=type("Governor", (), {
+        "max_llm_calls": 2, "max_llm_tokens": 100, "max_search_calls": 0, "max_cost_usd": 1.0
+    })(), modules=("model_signals",), model_keys=config.credentials)
+    with request_scope(budget, module="model_signals", max_requests=2):
+        result, operation = ModelClient(config, budget).complete_json(system="Return JSON", user="{}")
+        second, cooldown = ModelClient(config, budget).complete_json(system="Return JSON", user="{}")
+    assert result is None
+    assert second is None and cooldown["attempts"] == 0
+    assert operation["provider_scope"] == "organization"
+    assert operation["attempts"] == 1
+    assert budget.report()["outbound_requests"] == 1
+
+
+def test_groq_request_uses_provider_json_mode_and_completion_token_field(monkeypatch):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self, _limit):
+            return b'{"choices":[{"message":{"content":"{\\"items\\":[]}"}}]}'
+
+    captured = {}
+
+    def urlopen(request, timeout):
+        captured.update(json.loads(request.data))
+        return Response()
+
+    monkeypatch.setattr("norway_company_agent.llm.PROVIDER_OPENER.open", urlopen)
+    config = ModelConfig(
+        api_key="test", endpoint="https://api.groq.com/openai/v1/chat/completions",
+        model="openai/gpt-oss-120b", max_output_tokens=10,
+    )
+    budget = RunBudget(max_requests=1, governor=type("Governor", (), {
+        "max_llm_calls": 1, "max_llm_tokens": 100, "max_search_calls": 0, "max_cost_usd": 1.0
+    })(), modules=("model_signals",))
+    with request_scope(budget, module="model_signals", max_requests=1):
+        result, _ = ModelClient(config, budget).complete_json(system="Return JSON", user="{}")
+    assert result == {"items": []}
+    assert captured["max_completion_tokens"] == 10
+    assert "max_tokens" not in captured
+    assert captured["response_format"] == {"type": "json_object"}
+
+
+def test_planner_rejects_unapproved_urls_and_accepts_exact_candidates():
+    profile = {"organisation_number": ORG, "name": "Example AS", "municipality": "Oslo"}
+    candidates = [{"url": "https://example.no/", "source": "registry_snapshot"}]
+    assert validate_action({"action": "fetch_url", "url": "https://attacker.example/"}, profile, candidates)["status"] == "rejected"
+    assert validate_action({"action": "search_company", "query": "Example AS"}, profile, candidates)["status"] == "rejected"
+    accepted = validate_action({"action": "fetch_url", "url": "https://example.no/", "reason": "registry candidate"}, profile, candidates)
+    assert accepted == {
+        "status": "accepted", "action": "fetch_url", "url": "https://example.no/",
+        "source": "registry_snapshot", "reason": "registry candidate",
+    }
+
+
+def test_planner_returns_bounded_action_without_publishing_claims():
+    class PlannerStub:
+        config = ModelConfig(api_key="test", endpoint="https://model.example/v1/chat/completions", model="planner-model")
+
+        def complete_json(self, *, system: str, user: str):
+            assert "allowed_candidates" in user
+            return {"action": "fetch_url", "url": "https://example.no/", "reason": "exact registry candidate"}, {
+                "status": "available", "model": "planner-model", "reserved_tokens": 80,
+            }
+
+    profile = {"organisation_number": ORG, "name": "Example AS", "website": "https://example.no/"}
+    result = plan_next_action(profile, PlannerStub())
+    assert result["planner"]["status"] == "available"
+    assert result["planner"]["value"]["action"]["url"] == "https://example.no/"
+    assert "claims" not in result["planner"]["value"]
+
+
+def test_planner_search_result_is_deterministically_gated(monkeypatch):
+    class PlannerStub:
+        config = ModelConfig(api_key="test", endpoint="https://model.example/v1/chat/completions", model="planner-model")
+        budget = object()
+
+        def complete_json(self, *, system: str, user: str):
+            return {
+                "action": "search_company",
+                "query": "Example AS 993578843 Oslo",
+                "reason": "registry website is absent",
+            }, {"status": "available", "model": "planner-model"}
+
+    monkeypatch.setattr(
+        "norway_company_agent.planner.search_company",
+        lambda profile, budget: ([{
+            "url": "https://example.no/", "title": "Example AS",
+            "snippet": "993578843", "rank": 1, "provider": "brave_search_api",
+        }], {"status": "available", "candidate_count": 1, "raw": "must not persist"}),
+    )
+    profile = {"organisation_number": ORG, "name": "Example AS", "municipality": "Oslo"}
+    result = plan_next_action(profile, PlannerStub())
+    action = result["planner"]["value"]["action"]
+    assert action["candidate_url"] == "https://example.no/"
+    assert "raw" not in result["planner"]["value"]["search"]

@@ -167,6 +167,7 @@ def main() -> None:
     parser.add_argument("--modules", default="registry,accounting_obligation,registry_live,financials,roles,group,locations,website,hiring,activity")
     parser.add_argument("--discover-websites", action="store_true", help="Try conservative legal-name domain candidates after the registry website")
     parser.add_argument("--model-assist", action="store_true", help="Use an optional OpenAI-compatible model only on retained exact-company page captures")
+    parser.add_argument("--planner-assist", action="store_true", help="Use an optional bounded model planner for website candidate selection")
     args = parser.parse_args()
 
     started_at = utc_now()
@@ -179,6 +180,11 @@ def main() -> None:
         parser.error("--max-requests must be between 0 and 2000")
     if not math.isfinite(governor.max_cost_usd) or not 0 <= governor.max_cost_usd <= 10:
         parser.error("MAX_COST_USD must be finite and between 0 and 10")
+    if (not math.isfinite(governor.daily_cost_cap_usd) or
+            not 0 <= governor.daily_cost_cap_usd <= 10):
+        parser.error("SIGNALPOST_DAILY_COST_CAP_USD must be finite and between 0 and 10")
+    if (governor.daily_cost_cap_usd or governor.model_requests_per_key_per_day) and not governor.daily_cost_ledger_path:
+        parser.error("SIGNALPOST_DAILY_COST_LEDGER is required when a daily cap or per-key limit is enabled")
     safety_margin = _deadline_value("RUN_DEADLINE_SAFETY_SECONDS", 5.0)
     company_timeout = max(0.1, args.company_timeout_seconds if args.company_timeout_seconds is not None else _deadline_value("COMPANY_TIMEOUT_SECONDS", 45.0))
     if not math.isfinite(safety_margin) or not math.isfinite(company_timeout):
@@ -195,8 +201,15 @@ def main() -> None:
         requested_modules.append("website_discovery")
     if args.model_assist and "model_signals" not in requested_modules:
         requested_modules.append("model_signals")
+    if args.planner_assist and "planner" not in requested_modules:
+        requested_modules.append("planner")
+    if "planner" in requested_modules and not args.planner_assist:
+        parser.error("planner requires explicit --planner-assist")
+    if args.planner_assist and "website" not in requested_modules:
+        requested_modules.append("website")
     allowed_modules = {"registry", "accounting_obligation", "website", "website_discovery", "hiring", "activity", *official_endpoints("000000000")}
     allowed_modules.add("model_signals")
+    allowed_modules.add("planner")
     if set(requested_modules) - allowed_modules:
         parser.error(f"Unknown modules: {sorted(set(requested_modules) - allowed_modules)}")
     previous_profiles, previous_run_id = _load_previous_profiles(Path(args.previous_output) if args.previous_output else None)
@@ -288,7 +301,8 @@ def main() -> None:
     budget = RunBudget(max_requests=args.max_requests, deadline=stop_scheduling_at,
                        companies=len(orgs), governor=governor, context=context,
                        ledger_path=str(output_path.with_suffix(output_path.suffix + ".budget.jsonl")), run_id=args.run_id,
-                       modules=tuple(requested_modules))
+                       modules=tuple(requested_modules), model_keys=model_config.credentials,
+                       model_requests_per_key=model_config.requests_per_key_per_day)
     resume_budget_unknown = False
     if args.resume and prior_profiles:
         report_path = Path(args.report)
@@ -319,7 +333,7 @@ def main() -> None:
     pass2_errors = 0
     completed_tasks = 0
     skipped_tasks = 0
-    priority = ["registry_live", "website", "financials", "roles", "hiring", "activity", "website_discovery", "model_signals", "locations", "group", "financial_history"]
+    priority = ["registry_live", "planner", "website", "financials", "roles", "hiring", "activity", "website_discovery", "model_signals", "locations", "group", "financial_history"]
     module_operations = {
         module: {"planned_tasks": 0, "started_tasks": 0, "completed_tasks": 0,
                  "failed_tasks": 0, "skipped_tasks": 0, "skip_reasons": Counter(),
@@ -333,7 +347,7 @@ def main() -> None:
         for index, org in enumerate(orgs):
             if org not in found or profile_complete_for_modules(profiles[org], [module]):
                 continue
-            saved = module not in {"website", "website_discovery", "hiring", "activity", "model_signals"} and official_endpoints(org)[module][0] in saved_responses.get("responses", {})
+            saved = module not in {"website", "website_discovery", "hiring", "activity", "model_signals", "planner"} and official_endpoints(org)[module][0] in saved_responses.get("responses", {})
             tasks.append({"module": module, "organisation_number": org, "company_index": index, "saved": saved})
             module_operations[module]["planned_tasks"] += 1
     # Supplied responses require no live requests and precede all network work.
@@ -349,7 +363,7 @@ def main() -> None:
         org, module = task["organisation_number"], task["module"]
         if module in {"website", "website_discovery", "hiring", "activity"}:
             url, source_type = profiles[org].get("website") or "https://data.brreg.no/enhetsregisteret/api/enheter", "registry_linked_company_website"
-        elif module == "model_signals":
+        elif module in {"model_signals", "planner"}:
             url, source_type = "", "model_assisted_extraction"
         else:
             url, source_type = official_endpoints(org)[module]
@@ -379,16 +393,21 @@ def main() -> None:
                 pending_index += 1
                 org = task["organisation_number"]
                 module = task["module"]
-                if module == "model_signals":
+                if module in {"model_signals", "planner"}:
                     website = profiles[org].get("evidence", {}).get("website") or {}
-                    assessment = (website.get("value") or {}).get("identity_assessment") or {}
                     if not model_config.configured:
                         skip(task, "model_not_configured")
                         continue
-                    if website.get("status") != "available" or not assessment.get("publishable"):
+                    if module == "model_signals" and (
+                            website.get("status") != "available" or
+                            not (website.get("value") or {}).get("identity_assessment", {}).get("publishable")):
                         skip(task, "model_no_verified_website")
                         continue
-                if task["module"] == "website" and not profiles[org].get("website"):
+                planner_action = ((profiles[org].get("evidence", {}).get("planner") or {}).get("value") or {}).get("action") or {}
+                planner_has_candidate = planner_action.get("status") == "accepted" and bool(
+                    planner_action.get("candidate_url") or planner_action.get("url")
+                )
+                if task["module"] == "website" and not profiles[org].get("website") and not planner_has_candidate:
                     profiles[org].setdefault("evidence", {})["website"] = evidence("website", "not_found", "registry_linked_company_website", "https://data.brreg.no/enhetsregisteret/api/enheter", note="No website candidate in the supplied identity snapshot")
                     completed_orgs.add(org)
                     completed_tasks += 1
@@ -404,7 +423,12 @@ def main() -> None:
                 task["deadline"] = min(stop_scheduling_at, time.monotonic() + company_timeout)
                 task["request_limit"] = 0 if local_extraction else 4 if module in {"website", "website_discovery"} else 2
                 if module == "model_signals":
-                    task["request_limit"] = 1
+                    task["request_limit"] = min(2, len(model_config.credentials))
+                if module == "planner":
+                    task["request_limit"] = min(2, len(model_config.credentials)) + 1
+                    task["derived_candidates"] = args.discover_websites
+                    task["allow_search"] = bool(os.environ.get("BRAVE_SEARCH_API_KEY")) and governor.max_search_calls > 0
+                if module in {"model_signals", "planner"}:
                     task["model_config"] = {
                         "api_key": model_config.api_key,
                         "endpoint": model_config.endpoint,
@@ -413,6 +437,8 @@ def main() -> None:
                         "max_input_chars": model_config.max_input_chars,
                         "max_output_tokens": model_config.max_output_tokens,
                         "cost_per_call_usd": model_config.cost_per_call_usd,
+                        "api_keys": model_config.api_keys,
+                        "requests_per_key_per_day": model_config.requests_per_key_per_day,
                     }
                 pool.submit(task, company_timeout)
                 active_module = module
@@ -437,7 +463,7 @@ def main() -> None:
                 else:
                     if module in {"website", "website_discovery", "hiring", "activity"}:
                         url, source_type = profiles[org].get("website") or "", "registry_linked_company_website"
-                    elif module == "model_signals":
+                    elif module in {"model_signals", "planner"}:
                         url, source_type = "", "model_assisted_extraction"
                     else:
                         url, source_type = official_endpoints(org)[module]

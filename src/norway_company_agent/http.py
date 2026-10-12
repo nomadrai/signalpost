@@ -27,6 +27,16 @@ class BudgetRequestHandler(urllib.request.BaseHandler):
 COUNTED_OPENER = urllib.request.build_opener(BudgetRequestHandler())
 
 
+class ProviderRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Credential-bearing provider requests must not follow redirects."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+PROVIDER_OPENER = urllib.request.build_opener(ProviderRedirectHandler())
+
+
 @dataclass
 class FetchResult:
     url: str

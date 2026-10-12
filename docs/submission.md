@@ -108,11 +108,18 @@ The standalone Brave experiment requires `BRAVE_SEARCH_API_KEY` but is not part
 of the default bounded command. A hosted AI model key is not needed unless an
 optional model connector is enabled; Builderr states that a scoring key can be
 requested if one is needed. The optional GPT-assisted command adds
-`--model-assist` after configuring `SIGNALPOST_MODEL_API_KEY`, the compatible
-endpoint/model, `MAX_LLM_CALLS`, `MAX_LLM_TOKENS`, `MAX_COST_USD` and the
-per-call upper-bound cost. The model only extracts claims from retained
-verified-site evidence; deterministic identity and publication gates remain in
-force.
+`--model-assist` after configuring `GROQ_API_KEY(S)` or the generic model-key
+aliases, the compatible endpoint/model, `MAX_LLM_CALLS`, `MAX_LLM_TOKENS`,
+`MAX_COST_USD`, the per-call upper-bound cost and the persistent daily ledger.
+The model only extracts claims from retained verified-site evidence;
+deterministic identity and publication gates remain in force.
+
+`--planner-assist` is an additional development experiment, not part of the
+default submission command. It can select an allow-listed website candidate or
+invoke one transient Brave search under the shared search/request/cost budgets;
+raw search results are discarded and independently fetched pages remain the
+only publication evidence. The default submission declaration therefore still
+lists no model or search provider.
 
 The model transport integration is covered by
 `reports/model-assist-integration-100.md`; that check uses a local provider

@@ -12,6 +12,7 @@ from .company_signals import extract_company_signals
 from .evidence import evidence
 from .llm import ModelClient, ModelConfig
 from .model_signals import extract_model_signals
+from .planner import plan_next_action
 
 
 def enrich_module(task: dict, shared: tuple) -> dict:
@@ -22,13 +23,33 @@ def enrich_module(task: dict, shared: tuple) -> dict:
     started = time.monotonic()
     with request_scope(budget, company_index=task["company_index"],
                        deadline=task["deadline"], max_requests=task["request_limit"], module=module) as scope:
-        if module in {"website", "website_discovery"}:
+        if module == "planner":
+            config = ModelConfig(**(task.get("model_config") or {}))
+            records = plan_next_action(
+                profile,
+                ModelClient(config, budget),
+                derived_candidates=task.get("derived_candidates", False),
+                max_search_calls=1 if task.get("allow_search") else 0,
+            )
+            metric = {"bytes": 0, "latencies_ms": [], "snapshot_reads": 0}
+        elif module in {"website", "website_discovery"}:
             plan = website_candidates(profile, derived=module == "website_discovery")
             previous = profile.get("evidence", {}).get("website")
             if module == "website_discovery" and ((previous or {}).get("value") or {}).get("identity_assessment", {}).get("publishable"):
                 return {"records": {}, "metric": {"requests": 0, "bytes": 0, "latencies_ms": []}}
             attempted = {item["url"] for item in ((previous or {}).get("value") or {}).get("candidate_attempts", [])}
             metric = {"bytes": 0, "latencies_ms": []}
+            planner_action = ((profile.get("evidence", {}).get("planner") or {}).get("value") or {}).get("action") or {}
+            planner_url = planner_action.get("candidate_url") or planner_action.get("url")
+            if planner_action.get("status") == "accepted" and planner_url:
+                selected = next((item for item in plan if item.get("url") == planner_url), None)
+                if selected is None and planner_action.get("source") == "legal_name_domain":
+                    selected = next((item for item in website_candidates(profile, derived=True)
+                                     if item["url"] == planner_url), None)
+                if selected is None and planner_action.get("candidate_source") == "transient_brave_search":
+                    selected = {"url": planner_url, "source": "transient_brave_search"}
+                if selected is not None:
+                    plan = [selected, *[item for item in plan if item.get("url") != planner_url]]
             best = previous
             attempts = []
             for candidate in plan:

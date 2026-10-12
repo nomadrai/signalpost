@@ -289,6 +289,56 @@ def test_search_and_model_cost_reservations_share_one_atomic_cap():
         budget.reserve_search(float("nan"))
 
 
+def test_daily_cost_ledger_is_shared_across_run_budget_instances(tmp_path):
+    ledger = tmp_path / "daily-cost.json"
+    governor = BudgetGovernor(
+        max_llm_calls=10, max_llm_tokens=1000, max_search_calls=0, max_cost_usd=10,
+        daily_cost_cap_usd=0.15, daily_cost_ledger_path=str(ledger),
+        model_requests_per_key_per_day=2,
+    )
+    first = RunBudget(max_requests=10, governor=governor, model_keys=("key-one",))
+    second = RunBudget(max_requests=10, governor=governor, model_keys=("key-one",))
+    assert first.reserve_llm(1, 0.09, key_id="key-one")
+    assert second.reserve_llm(1, 0.02, key_id="key-one")
+    assert not first.reserve_llm(1, 0.01, key_id="key-one")  # per-key daily request cap
+    assert second.reserve_llm(1, 0.01, key_id="key-two")
+    assert not first.reserve_llm(1, 0.04, key_id="key-two")  # shared USD cap
+    state = json.loads(ledger.read_text())
+    assert state["cost_microdollars"] == 120000
+    assert "key-one" not in ledger.read_text()
+    assert first.report()["daily"]["remaining_cost_usd"] == pytest.approx(0.03)
+
+
+def test_daily_cost_ledger_is_atomic_across_independent_budget_objects(tmp_path):
+    ledger = tmp_path / "concurrent-daily-cost.json"
+    governor = BudgetGovernor(
+        max_llm_calls=2, max_llm_tokens=100, max_search_calls=0, max_cost_usd=1,
+        daily_cost_cap_usd=0.05, daily_cost_ledger_path=str(ledger),
+    )
+
+    def reserve(_):
+        budget = RunBudget(max_requests=2, governor=governor)
+        return budget.reserve_llm(1, 0.01, key_id="independent")
+
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        outcomes = list(executor.map(reserve, range(20)))
+    assert sum(outcomes) == 5
+    assert json.loads(ledger.read_text())["cost_microdollars"] == 50000
+
+
+def test_daily_cost_ledger_fails_closed_when_state_is_malformed(tmp_path):
+    ledger = tmp_path / "malformed-daily-cost.json"
+    ledger.write_text("not-json")
+    governor = BudgetGovernor(
+        max_llm_calls=1, max_llm_tokens=100, max_search_calls=0, max_cost_usd=1,
+        daily_cost_cap_usd=1, daily_cost_ledger_path=str(ledger),
+    )
+    budget = RunBudget(max_requests=1, governor=governor)
+    assert not budget.reserve_llm(1, 0.01, key_id="secret")
+    assert ledger.read_text() == "not-json"
+    assert budget.report()["daily"]["status"] == "unreadable"
+
+
 @pytest.mark.parametrize("compressed", [False, True])
 def test_universe_snapshot_support_preserves_attribution_and_missing_values(tmp_path, compressed):
     source = tmp_path / ("universe.jsonl.gz" if compressed else "universe.jsonl")
@@ -336,6 +386,21 @@ def test_saved_responses_enrich_at_zero_outbound_budget_and_resume_preserves_all
     resumed = json.loads((tmp_path / "report.json").read_text())
     assert resumed["budget"]["outbound_requests"] == 0
     assert resumed["operations"]["snapshot_reads"] == 0
+
+
+def test_planner_assist_without_credentials_is_explicit_and_key_free(tmp_path):
+    command = _command(tmp_path) + ["--planner-assist", "--max-requests", "0"]
+    environment = {**os.environ, "PYTHONPATH": os.pathsep.join((str(ROOT), str(ROOT / "src"), str(ROOT / "tests")))}
+    for name in ("GROQ_API_KEY", "GROQ_API_KEYS", "SIGNALPOST_MODEL_API_KEY", "SIGNALPOST_MODEL_API_KEYS",
+                 "OPENAI_API_KEY", "OPENAI_API_KEYS", "AI_API_KEY"):
+        environment.pop(name, None)
+    subprocess.run(command, env=environment, check=True, capture_output=True, timeout=20)
+    report = json.loads((tmp_path / "report.json").read_text())
+    row = json.loads((tmp_path / "envelopes.jsonl").read_text())
+    assert "planner" in report["modules"]
+    assert row["profile"]["evidence"]["planner"]["status"] == "not_fetched"
+    assert row["profile"]["evidence"]["planner"]["note"] == "model_not_configured"
+    assert report["validation"]["passed"]
 
 
 def test_supervisor_bounds_entire_run_and_emits_terminal_rows(tmp_path):
