@@ -439,6 +439,7 @@ def main() -> None:
                         "cost_per_call_usd": model_config.cost_per_call_usd,
                         "api_keys": model_config.api_keys,
                         "requests_per_key_per_day": model_config.requests_per_key_per_day,
+                        "provider_min_interval_seconds": model_config.provider_min_interval_seconds,
                     }
                 pool.submit(task, company_timeout)
                 active_module = module

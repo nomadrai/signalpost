@@ -10,9 +10,9 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from .budget import BudgetExceeded, bounded_timeout, reserve_http_attempt
+from .budget import BudgetExceeded, bounded_sleep, bounded_timeout, reserve_http_attempt
 from .discovery import build_company_search_query
-from .http import PROVIDER_OPENER
+from .http import PROVIDER_OPENER, provider_error_diagnostics
 
 
 FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v2/search"
@@ -25,6 +25,16 @@ def _cost_from_environment() -> float:
         raise ValueError("Firecrawl search price must be finite and nonnegative") from exc
     if not math.isfinite(value) or value < 0:
         raise ValueError("Firecrawl search price must be finite and nonnegative")
+    return value
+
+
+def _interval_from_environment() -> float:
+    try:
+        value = float(os.environ.get("FIRECRAWL_SEARCH_MIN_INTERVAL_SECONDS", "6.5"))
+    except ValueError as exc:
+        raise ValueError("Firecrawl search interval must be finite and nonnegative") from exc
+    if not math.isfinite(value) or value < 0:
+        raise ValueError("Firecrawl search interval must be finite and nonnegative")
     return value
 
 
@@ -57,6 +67,10 @@ def search_company(profile: dict[str, Any], budget, *, timeout: float = 15.0,
     query_hash = hashlib.sha256(query.encode("utf-8")).hexdigest()
     if cost_per_call_usd is None:
         cost_per_call_usd = _cost_from_environment()
+    try:
+        bounded_sleep(budget.reserve_search_start(_interval_from_environment()))
+    except BudgetExceeded as exc:
+        return [], {"status": "budget_exhausted", "reason": str(exc), "query_sha256": query_hash}
     if not budget.reserve_search(cost_per_call_usd):
         return [], {"status": "budget_exhausted", "query_sha256": query_hash}
     body = json.dumps({
@@ -102,11 +116,18 @@ def search_company(profile: dict[str, Any], budget, *, timeout: float = 15.0,
         }
     except BudgetExceeded as exc:
         return [], {"status": "budget_exhausted", "reason": str(exc), "query_sha256": query_hash}
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
-        return [], {
+    except urllib.error.HTTPError as exc:
+        return [], {**provider_error_diagnostics(exc, started),
+                    "status": "failed", "query_sha256": query_hash,
+                    "reason": type(exc).__name__}
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        operation = {
             "status": "failed",
             "provider_status": getattr(exc, "code", 0),
             "latency_ms": int((time.monotonic() - started) * 1000),
             "query_sha256": query_hash,
             "reason": type(exc).__name__,
         }
+        if isinstance(exc, TimeoutError):
+            operation["timeout_seconds"] = timeout
+        return [], operation

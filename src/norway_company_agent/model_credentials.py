@@ -36,6 +36,7 @@ class ModelKeyPool:
         self.next_index = context.Value("q", 0, lock=False)
         self.uses = context.Array("q", len(self.keys), lock=False)
         self.cooldown_until = context.Array("d", len(self.keys), lock=False)
+        self.provider_next_start = context.Value("d", 0.0, lock=False)
         # Some providers, including Groq, apply quotas at organization scope.
         # This shared gate prevents another credential from being used to
         # bypass a provider-wide 429 cooldown.
@@ -69,6 +70,17 @@ class ModelKeyPool:
                 self.next_index.value = index + 1
                 return KeyLease(index, self.keys[index])
         return None
+
+    def reserve_provider_delay(self, interval_seconds: float) -> float:
+        """Reserve the next shared provider start slot across worker processes."""
+        interval = float(interval_seconds)
+        if not math.isfinite(interval) or interval <= 0:
+            return 0.0
+        with self._locked():
+            now = time.monotonic()
+            start = max(now, self.provider_next_start.value)
+            self.provider_next_start.value = start + interval
+            return max(0.0, start - now)
 
     def release(self, lease: KeyLease) -> None:
         with self._locked():

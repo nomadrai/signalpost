@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import multiprocessing
 import os
@@ -9,6 +10,7 @@ import sys
 import threading
 import tempfile
 import urllib.parse
+import urllib.error
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -23,6 +25,7 @@ from norway_company_agent.budget import BudgetGovernor, DailyCostLedger, RunBudg
 from norway_company_agent.evidence import evidence
 from norway_company_agent.firecrawl import search_company
 from norway_company_agent.llm import ModelClient, ModelConfig
+from norway_company_agent.model_credentials import ModelKeyPool
 from norway_company_agent.planner import validate_action
 
 
@@ -38,6 +41,18 @@ def test_daily_cap_survives_independent_process_reservations(tmp_path):
     state = json.loads(Path(path).read_text())
     assert state["cost_microdollars"] == 50000
     assert state["requests"] == 5
+
+
+def test_provider_pacing_slots_are_shared_by_the_credential_pool():
+    pool = ModelKeyPool(("fixture-one", "fixture-two"))
+    assert pool.reserve_provider_delay(0.01) == 0
+    assert pool.reserve_provider_delay(0.01) >= 0.009
+
+
+def test_search_pacing_slots_are_shared_by_the_run_budget():
+    budget = RunBudget(max_requests=2)
+    assert budget.reserve_search_start(0.01) == 0
+    assert budget.reserve_search_start(0.01) >= 0.009
 
 
 def test_daily_ledger_validates_before_rollover_and_zero_denies_paid_calls(tmp_path, monkeypatch):
@@ -122,6 +137,30 @@ def test_firecrawl_keyless_search_uses_no_auth_header_and_discards_result_shape(
     assert captured["authorization"] is None
     assert captured["body"]["country"] == "NO"
     assert results[0]["provider"] == "firecrawl_search_api"
+
+
+def test_firecrawl_http_failure_keeps_bounded_provider_diagnostics(monkeypatch):
+    error = urllib.error.HTTPError(
+        "https://api.firecrawl.dev/v2/search", 429, "Too Many Requests",
+        {"X-Request-ID": "firecrawl-123", "Retry-After": "8"},
+        io.BytesIO(b'{"error":{"code":"rate_limit","message":"private body"}}'),
+    )
+    monkeypatch.setenv("FIRECRAWL_SEARCH_MIN_INTERVAL_SECONDS", "0")
+    monkeypatch.setattr("norway_company_agent.firecrawl.PROVIDER_OPENER.open",
+                        lambda request, timeout: (_ for _ in ()).throw(error))
+    ledger = str(Path(tempfile.mkdtemp(prefix="firecrawl-http-error-")) / "daily.json")
+    budget = RunBudget(max_requests=1, governor=BudgetGovernor(
+        max_llm_calls=0, max_llm_tokens=0, max_search_calls=1, max_cost_usd=1,
+        daily_cost_cap_usd=1, daily_cost_ledger_path=ledger), modules=("planner",))
+    profile = {"organisation_number": "993578843", "name": "Example AS", "municipality": "Oslo"}
+    with request_scope(budget, module="planner", max_requests=1):
+        results, operation = search_company(profile, budget, count=3)
+    assert results == []
+    assert operation["provider_status"] == 429
+    assert operation["provider_request_id"] == "firecrawl-123"
+    assert operation["provider_error_code"] == "rate_limit"
+    assert operation["retry_after_seconds"] == 8
+    assert "private body" not in json.dumps(operation)
 
 
 @pytest.fixture

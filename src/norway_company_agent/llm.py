@@ -4,15 +4,16 @@ import json
 import math
 import os
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
 
-from .budget import BudgetExceeded, bounded_timeout, reserve_http_attempt
+from .budget import BudgetExceeded, bounded_sleep, bounded_timeout, reserve_http_attempt
 from .model_credentials import ModelKeyPool
-from .http import PROVIDER_OPENER
+from .http import PROVIDER_OPENER, provider_error_diagnostics
 
 
 def _float_env(name: str, default: float) -> float:
@@ -54,6 +55,7 @@ class ModelConfig:
     cost_per_call_usd: float = 0.0
     api_keys: tuple[str, ...] = field(default=(), repr=False)
     requests_per_key_per_day: int = 0
+    provider_min_interval_seconds: float = 0.0
 
     @classmethod
     def from_environment(cls) -> "ModelConfig":
@@ -87,6 +89,7 @@ class ModelConfig:
         known_price = (host == "api.groq.com" or host.endswith(".groq.com")) and model == "openai/gpt-oss-120b"
         price_name = "SIGNALPOST_MODEL_COST_PER_CALL_USD"
         price_default = 0.0 if known_price or price_name in os.environ else float("nan")
+        interval_default = 2.1 if known_price else 0.0
         return cls(
             api_key=api_key,
             endpoint=endpoint,
@@ -97,12 +100,17 @@ class ModelConfig:
             cost_per_call_usd=_float_env(price_name, price_default),
             api_keys=tuple(keys[1:]),
             requests_per_key_per_day=_int_env("SIGNALPOST_MODEL_REQUESTS_PER_KEY_PER_DAY", 0),
+            provider_min_interval_seconds=_float_env(
+                "SIGNALPOST_MODEL_MIN_INTERVAL_SECONDS", interval_default
+            ),
         )
 
     @property
     def configured(self) -> bool:
         return bool(self.credentials and self.endpoint and self.model and self.max_output_tokens
-                    and math.isfinite(self.cost_per_call_usd) and self.cost_per_call_usd >= 0)
+                    and math.isfinite(self.cost_per_call_usd) and self.cost_per_call_usd >= 0
+                    and math.isfinite(self.provider_min_interval_seconds)
+                    and self.provider_min_interval_seconds >= 0)
 
     @property
     def credentials(self) -> tuple[str, ...]:
@@ -184,11 +192,21 @@ class ModelClient:
         attempts = 0
         last_reason = "model_key_unavailable"
         while attempts < len(config.credentials):
+            try:
+                provider_delay = self.key_pool.reserve_provider_delay(
+                    config.provider_min_interval_seconds if config.provider_rate_limits_shared else 0
+                )
+                if provider_delay:
+                    bounded_sleep(provider_delay)
+            except BudgetExceeded as exc:
+                return None, {"status": "budget_exhausted", "reason": str(exc),
+                              "attempts": attempts, "key_count": len(config.credentials)}
             lease = self.key_pool.acquire()
             if lease is None:
                 return None, {"status": "budget_exhausted", "reason": last_reason,
                               "key_count": len(config.credentials), "attempts": attempts}
             reserved_transport = False
+            started = time.monotonic()
             try:
                 if not self.budget.reserve_llm(estimated_tokens, reservation_cost_usd,
                                                key_id=lease.key):
@@ -228,6 +246,7 @@ class ModelClient:
                     "key_count": len(config.credentials),
                 }
             except urllib.error.HTTPError as exc:
+                diagnostics = provider_error_diagnostics(exc, started)
                 if exc.code == 429:
                     retry_after = exc.headers.get("Retry-After", "60") if exc.headers else "60"
                     try:
@@ -240,23 +259,27 @@ class ModelClient:
                     )
                     last_reason = "provider_rate_limited"
                     if config.provider_rate_limits_shared:
-                        return None, {"status": "failed", "reason": "provider_rate_limited",
+                        return None, {**diagnostics, "status": "failed", "reason": "provider_rate_limited",
                                       "attempts": attempts + 1, "key_count": len(config.credentials),
                                       "reserved_cost_usd": reservation_cost_usd,
                                       "provider_scope": "organization"}
                     if attempts + 1 >= len(config.credentials):
-                        return None, {"status": "failed", "reason": "http_429",
+                        return None, {**diagnostics, "status": "failed", "reason": "http_429",
                                       "attempts": attempts + 1, "key_count": len(config.credentials)}
                     attempts += 1
                     continue
-                return None, {"status": "failed", "reason": f"http_{exc.code}",
+                return None, {**diagnostics, "status": "failed", "reason": f"http_{exc.code}",
                               "attempts": attempts + 1, "key_count": len(config.credentials)}
             except BudgetExceeded as exc:
                 return None, {"status": "budget_exhausted", "reason": str(exc),
                               "attempts": attempts, "key_count": len(config.credentials)}
             except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
-                return None, {"status": "failed", "reason": type(exc).__name__,
-                              "attempts": attempts + 1, "key_count": len(config.credentials)}
+                operation = {"status": "failed", "reason": type(exc).__name__,
+                             "attempts": attempts + 1, "key_count": len(config.credentials)}
+                if isinstance(exc, TimeoutError):
+                    operation.update({"latency_ms": int((time.monotonic() - started) * 1000),
+                                      "timeout_seconds": config.timeout_seconds})
+                return None, operation
             finally:
                 if not reserved_transport:
                     self.key_pool.release(lease)

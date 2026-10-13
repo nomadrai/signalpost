@@ -159,6 +159,11 @@ provider credential is stored in the repository.
 Groq configuration, persistent daily budgeting and the opt-in planner are covered
 by `reports/provider-planner-verification.md`, including end-to-end local
 provider fixtures, wrong-owner rejection, resume and a zero-request 100-company smoke.
+The first paced real-provider allocation is recorded in
+`reports/provider-allocation-100-paced-search.md`; it is directional development
+evidence, not an official score.
+The follow-up diagnostic allocation and bounded provider-error handling are
+recorded in `reports/provider-allocation-100-diagnostics.md`.
 
 Audit a retained checkpoint without resuming it or making network requests:
 

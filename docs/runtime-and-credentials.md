@@ -108,6 +108,20 @@ export SIGNALPOST_DAILY_COST_CAP_USD=10
 export SIGNALPOST_DAILY_COST_LEDGER="$HOME/.cache/signalpost/daily-cost.json"
 ```
 
+Groq GPT-OSS requests are paced through the shared worker pool. The default
+`SIGNALPOST_MODEL_MIN_INTERVAL_SECONDS=2.1` is conservative for the published
+free-plan-style 30 RPM limit; increase it only when the active organization
+limits justify doing so. Firecrawl Search is similarly paced by the shared
+`FIRECRAWL_SEARCH_MIN_INTERVAL_SECONDS` gate, which defaults to 6.5 seconds to
+stay below the documented 10 searches/minute free-plan limit. These gates are
+provider-call start slots, not additional request or cost allowances.
+
+Provider HTTP failures retain only bounded diagnostics: status, elapsed time,
+safe request identifiers, retry-after seconds, a hash and size for a bounded
+response sample, and a provider error code when available. Response bodies,
+prompts, page content and authorization values are not persisted. HTTP 400s are
+not retried; a provider 429 remains subject to the provider-wide cooldown rules.
+
 `GROQ_API_KEYS` accepts a comma-separated pool. Only one credential namespace
 is selected: explicit `SIGNALPOST_MODEL_API_KEY(S)`, otherwise Groq, OpenAI,
 then the generic AI alias. Keys from different providers are never combined.

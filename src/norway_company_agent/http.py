@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import hashlib
+import math
+import re
 import time
 import urllib.error
 import urllib.request
@@ -35,6 +37,63 @@ class ProviderRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 PROVIDER_OPENER = urllib.request.build_opener(ProviderRedirectHandler())
+
+
+_SAFE_PROVIDER_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}\Z")
+
+
+def provider_error_diagnostics(error: urllib.error.HTTPError, started: float) -> dict[str, Any]:
+    """Return bounded, secret-safe diagnostics for a provider HTTP error.
+
+    Provider response bodies are never retained. A bounded body sample is hashed
+    for correlation, while only conservative machine-readable error codes and
+    request identifiers are copied from the response.
+    """
+    details: dict[str, Any] = {
+        "provider_status": int(getattr(error, "code", 0) or 0),
+        "latency_ms": int((time.monotonic() - started) * 1000),
+    }
+    headers = getattr(error, "headers", None)
+    if headers is not None:
+        def header(name: str):
+            value = headers.get(name)
+            if value is not None:
+                return value
+            for key, candidate in getattr(headers, "items", lambda: ())():
+                if str(key).casefold() == name.casefold():
+                    return candidate
+            return None
+
+        for name in ("x-request-id", "request-id", "cf-ray"):
+            value = header(name)
+            if isinstance(value, str) and _SAFE_PROVIDER_TOKEN.fullmatch(value.strip()):
+                details["provider_request_id"] = value.strip()
+                break
+        retry_after = header("Retry-After")
+        try:
+            retry_after_value = float(retry_after)
+        except (TypeError, ValueError):
+            retry_after_value = -1.0
+        if math.isfinite(retry_after_value) and retry_after_value >= 0:
+            details["retry_after_seconds"] = retry_after_value
+    try:
+        sample = error.read(65_536)
+    except OSError:
+        sample = b""
+    if isinstance(sample, str):
+        sample = sample.encode("utf-8", errors="replace")
+    if sample:
+        details["provider_body_sample_bytes"] = len(sample)
+        details["provider_body_sample_sha256"] = hashlib.sha256(sample).hexdigest()
+        try:
+            payload = json.loads(sample)
+        except (TypeError, ValueError):
+            payload = None
+        error_payload = payload.get("error") if isinstance(payload, dict) else None
+        code = error_payload.get("code") if isinstance(error_payload, dict) else None
+        if isinstance(code, str) and _SAFE_PROVIDER_TOKEN.fullmatch(code):
+            details["provider_error_code"] = code
+    return details
 
 
 @dataclass

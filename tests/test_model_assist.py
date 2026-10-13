@@ -180,6 +180,30 @@ def test_groq_rate_limit_is_provider_wide_and_does_not_fail_over_to_another_key(
     assert budget.report()["outbound_requests"] == 1
 
 
+def test_model_http_failure_keeps_bounded_provider_diagnostics(monkeypatch):
+    error = urllib.error.HTTPError(
+        "https://model.example/v1/chat/completions", 400, "Bad Request",
+        {"X-Request-ID": "request-123", "Retry-After": "4"},
+        io.BytesIO(b'{"error":{"code":"invalid_request","message":"private body"}}'),
+    )
+    monkeypatch.setattr("norway_company_agent.llm.PROVIDER_OPENER.open",
+                        lambda request, timeout: (_ for _ in ()).throw(error))
+    config = ModelConfig(api_key="test", endpoint="https://model.example/v1/chat/completions",
+                         model="test-model", max_output_tokens=10)
+    budget = RunBudget(max_requests=1, governor=type("Governor", (), {
+        "max_llm_calls": 1, "max_llm_tokens": 100, "max_search_calls": 0, "max_cost_usd": 1.0
+    })(), modules=("model_signals",))
+    with request_scope(budget, module="model_signals", max_requests=1):
+        result, operation = ModelClient(config, budget).complete_json(system="Return JSON", user="{}")
+    assert result is None
+    assert operation["provider_status"] == 400
+    assert operation["provider_request_id"] == "request-123"
+    assert operation["provider_error_code"] == "invalid_request"
+    assert operation["retry_after_seconds"] == 4
+    assert operation["provider_body_sample_bytes"] > 0
+    assert "private body" not in json.dumps(operation)
+
+
 def test_groq_request_uses_provider_json_mode_and_completion_token_field(monkeypatch):
     class Response:
         def __enter__(self):

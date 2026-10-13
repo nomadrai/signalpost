@@ -287,6 +287,7 @@ class RunBudget:
         self.search_calls = context.Value("q", 0, lock=False)
         self.cost = context.Value("q", 0, lock=False)
         self.history_next_start = context.Value("d", 0.0, lock=False)
+        self.search_next_start = context.Value("d", 0.0, lock=False)
         daily_cap = float(getattr(governor, "daily_cost_cap_usd", 0.0))
         daily_path = str(getattr(governor, "daily_cost_ledger_path", "") or "")
         daily_key_cap = max(0, int(getattr(governor, "model_requests_per_key_per_day", 0)))
@@ -307,6 +308,21 @@ class RunBudget:
             start = max(now, self.history_next_start.value)
             self.history_next_start.value = start + 2.1
             return max(0, start - now)
+        finally:
+            self.lock.release()
+
+    def reserve_search_start(self, interval_seconds: float) -> float:
+        """Reserve a shared start slot for a rate-limited search provider."""
+        interval = float(interval_seconds)
+        if not math.isfinite(interval) or interval <= 0:
+            return 0.0
+        if not self.lock.acquire(timeout=max(0.001, min(1.0, self.deadline - time.monotonic()))):
+            raise BudgetExceeded("search_gate_unavailable")
+        try:
+            now = time.monotonic()
+            start = max(now, self.search_next_start.value)
+            self.search_next_start.value = start + interval
+            return max(0.0, start - now)
         finally:
             self.lock.release()
 

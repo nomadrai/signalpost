@@ -1,8 +1,8 @@
 # Provider and planner follow-up verification
 
-Working-tree follow-up to `523cf7d`, reviewed 2026-10-13. This report records
-local regression and fixture verification, not a real-provider coverage result
-or an official Builderr score.
+Follow-up to the pushed provider/planner checkpoint `20ef13e`, reviewed
+2026-10-13. This report records local regression and fixture verification, not a
+real-provider coverage result or an official Builderr score.
 
 ## Automated verification
 
@@ -11,7 +11,7 @@ uv run --no-sync --with pytest pytest -q
 git diff --check
 ```
 
-Result: **159 tests passed, plus 5 subtests**; whitespace checks passed.
+Result: **163 tests passed, plus 5 subtests**; whitespace checks passed.
 
 The provider/planner tests cover:
 
@@ -30,6 +30,9 @@ The provider/planner tests cover:
   UTC-day rollover, per-key limits, and a zero daily monetary allowance.
 - Planner URL allow-listing, malformed action/query rejection, transient search
   retention, key-free fallback, and terminal output after a planner worker error.
+- Secret-safe provider HTTP diagnostics, including bounded request IDs,
+  retry-after values, provider error codes and response sample hashes without
+  retaining response bodies.
 
 ## End-to-end local provider fixtures
 
@@ -121,4 +124,5 @@ published pricing says Search costs 2 credits per 10 results, with 1,000 free
 monthly credits and a 10-searches-per-minute free-plan limit.
 
 Real-provider coverage comparison and final candidate packaging remain open.
-The Firecrawl/Groq changes are still uncommitted.
+The real-provider allocation reports are directional development evidence, not
+official Builderr scores.
