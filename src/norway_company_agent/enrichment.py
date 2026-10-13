@@ -46,8 +46,8 @@ def enrich_module(task: dict, shared: tuple) -> dict:
                 if selected is None and planner_action.get("source") == "legal_name_domain":
                     selected = next((item for item in website_candidates(profile, derived=True)
                                      if item["url"] == planner_url), None)
-                if selected is None and planner_action.get("candidate_source") == "transient_brave_search":
-                    selected = {"url": planner_url, "source": "transient_brave_search"}
+                if selected is None and planner_action.get("candidate_source") == "transient_firecrawl_search":
+                    selected = {"url": planner_url, "source": "transient_firecrawl_search"}
                 if selected is not None:
                     plan = [selected, *[item for item in plan if item.get("url") != planner_url]]
             best = previous

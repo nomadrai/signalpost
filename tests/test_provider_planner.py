@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import threading
+import tempfile
 import urllib.parse
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
@@ -20,6 +21,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from norway_company_agent.budget import BudgetGovernor, DailyCostLedger, RunBudget, request_scope, reserve_http_attempt
 from norway_company_agent.evidence import evidence
+from norway_company_agent.firecrawl import search_company
 from norway_company_agent.llm import ModelClient, ModelConfig
 from norway_company_agent.planner import validate_action
 
@@ -81,6 +83,47 @@ def test_malformed_planner_actions_never_open_arbitrary_urls():
         assert validate_action(action, profile, candidates)["status"] == "rejected"
 
 
+def test_firecrawl_keyless_search_uses_no_auth_header_and_discards_result_shape(monkeypatch):
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self, _limit):
+            return json.dumps({"success": True, "data": {"web": [{
+                "url": "https://example.no/", "title": "Example AS",
+                "description": "transient snippet", "position": 1,
+            }]}, "creditsUsed": 2}).encode()
+
+    captured = {}
+
+    def open_provider(request, timeout):
+        captured["authorization"] = request.get_header("Authorization")
+        captured["body"] = json.loads(request.data)
+        return Response()
+
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    monkeypatch.setattr("norway_company_agent.firecrawl.PROVIDER_OPENER.open", open_provider)
+    monkeypatch.setattr("norway_company_agent.firecrawl.FIRECRAWL_ENDPOINT", "http://127.0.0.1:9/search")
+    ledger = str(Path(tempfile.mkdtemp(prefix="firecrawl-test-")) / "daily.json")
+    budget = RunBudget(max_requests=1, governor=BudgetGovernor(
+        max_llm_calls=0, max_llm_tokens=0, max_search_calls=1, max_cost_usd=1,
+        daily_cost_cap_usd=1, daily_cost_ledger_path=ledger), modules=("planner",))
+    profile = {"organisation_number": "993578843", "name": "Example AS", "municipality": "Oslo"}
+    with request_scope(budget, module="planner", max_requests=1):
+        results, operation = search_company(profile, budget, count=3)
+    assert operation["status"] == "available"
+    assert operation["credits_used"] == 2
+    assert results[0]["url"] == "https://example.no/"
+    assert captured["authorization"] is None
+    assert captured["body"]["country"] == "NO"
+    assert results[0]["provider"] == "firecrawl_search_api"
+
+
 @pytest.fixture
 def provider_server():
     counts = Counter()
@@ -99,6 +142,12 @@ def provider_server():
                 self.send_response(302)
                 self.send_header("Location", "/credential-leak")
                 self.end_headers()
+                return
+            if self.path == "/search":
+                self.send_json({"success": True, "data": {"web": [{
+                    "url": "https://example.no/", "title": "Example AS",
+                    "description": "993578843 transient-only-marker", "position": 1,
+                }]}, "creditsUsed": 2})
                 return
             if body["model"] == "fetch-fixture":
                 action = {"action": "fetch_url", "url": "https://example.no/"}
@@ -140,8 +189,8 @@ def test_provider_redirect_is_not_followed_or_given_credentials(provider_server)
 
 def configure_runner_fixture(base, mode):
     """Real local model/search HTTP with an independently gated page fixture."""
-    from norway_company_agent import brave, enrichment
-    brave.BRAVE_ENDPOINT = base + "/search"
+    from norway_company_agent import firecrawl, enrichment
+    firecrawl.FIRECRAWL_ENDPOINT = base + "/search"
 
     def capture(url, **kwargs):
         assert url == "https://example.no/"
@@ -182,7 +231,7 @@ def test_runner_executes_planner_candidates_and_preserves_identity_gate(tmp_path
                    "SIGNALPOST_MODEL_ENDPOINT": base + "/chat/completions",
                    "SIGNALPOST_MODEL": "fetch-fixture" if mode == "fetch" else "search-fixture",
                    "SIGNALPOST_MODEL_COST_PER_CALL_USD": "0.02",
-                   "BRAVE_SEARCH_API_KEY": "fixture-search-secret", "SIGNALPOST_SEARCH_COST_PER_CALL_USD": "0.01",
+                   "FIRECRAWL_API_KEY": "fixture-search-secret", "FIRECRAWL_SEARCH_COST_PER_CALL_USD": "0.01",
                    "MAX_LLM_CALLS": "1", "MAX_LLM_TOKENS": "20000", "MAX_SEARCH_CALLS": "1", "MAX_COST_USD": "1",
                    "SIGNALPOST_DAILY_COST_CAP_USD": "1", "SIGNALPOST_DAILY_COST_LEDGER": str(tmp_path / "daily.json")}
     command = [sys.executable, str(driver), "--input", str(inputs), "--bulk", str(bulk),

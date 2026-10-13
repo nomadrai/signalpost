@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from .brave import search_company
+from .firecrawl import search_company
 from .discovery import choose_search_candidate, website_candidates
 from .evidence import evidence
 from .website import normalize_homepage
@@ -103,7 +103,7 @@ def plan_next_action(profile: dict[str, Any], client, *, derived_candidates: boo
                     "action": action["action"],
                     "reason": action.get("reason", ""),
                     "candidate_url": selected.get("url"),
-                    "candidate_source": "transient_brave_search",
+                    "candidate_source": "transient_firecrawl_search",
                 }
             else:
                 action = {

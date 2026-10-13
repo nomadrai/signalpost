@@ -85,6 +85,8 @@ class ModelConfig:
                  or os.environ.get("AI_MODEL") or "openai/gpt-oss-120b").strip()
         host = (urllib.parse.urlparse(endpoint).hostname or "").casefold()
         known_price = (host == "api.groq.com" or host.endswith(".groq.com")) and model == "openai/gpt-oss-120b"
+        price_name = "SIGNALPOST_MODEL_COST_PER_CALL_USD"
+        price_default = 0.0 if known_price or price_name in os.environ else float("nan")
         return cls(
             api_key=api_key,
             endpoint=endpoint,
@@ -92,8 +94,7 @@ class ModelConfig:
             timeout_seconds=_float_env("SIGNALPOST_MODEL_TIMEOUT_SECONDS", 30.0),
             max_input_chars=_int_env("SIGNALPOST_MODEL_MAX_INPUT_CHARS", 18_000),
             max_output_tokens=_int_env("SIGNALPOST_MODEL_MAX_OUTPUT_TOKENS", 1_200),
-            cost_per_call_usd=_float_env("SIGNALPOST_MODEL_COST_PER_CALL_USD",
-                                        0.0 if known_price and "SIGNALPOST_MODEL_COST_PER_CALL_USD" not in os.environ else float("nan")),
+            cost_per_call_usd=_float_env(price_name, price_default),
             api_keys=tuple(keys[1:]),
             requests_per_key_per_day=_int_env("SIGNALPOST_MODEL_REQUESTS_PER_KEY_PER_DAY", 0),
         )

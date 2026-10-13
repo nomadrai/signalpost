@@ -427,7 +427,7 @@ def main() -> None:
                 if module == "planner":
                     task["request_limit"] = min(2, len(model_config.credentials)) + 1
                     task["derived_candidates"] = args.discover_websites
-                    task["allow_search"] = bool(os.environ.get("BRAVE_SEARCH_API_KEY")) and governor.max_search_calls > 0
+                    task["allow_search"] = governor.max_search_calls > 0
                 if module in {"model_signals", "planner"}:
                     task["model_config"] = {
                         "api_key": model_config.api_key,
