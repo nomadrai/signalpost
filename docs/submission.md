@@ -104,8 +104,7 @@ Secrets: None required by the default batch; optional provider credentials are
          server-side environment variables only.
 ```
 
-The standalone Brave experiment requires `BRAVE_SEARCH_API_KEY` but is not part
-of the default bounded command. A hosted AI model key is not needed unless an
+The default bounded command does not enable Firecrawl Search. A hosted AI model key is not needed unless an
 optional model connector is enabled; Builderr states that a scoring key can be
 requested if one is needed. The optional GPT-assisted command adds
 `--model-assist` after configuring `GROQ_API_KEY(S)` or the generic model-key
@@ -116,8 +115,8 @@ deterministic identity and publication gates remain in force.
 
 `--planner-assist` is an additional development experiment, not part of the
 default submission command. It can select an allow-listed website candidate or
-invoke one transient Brave search under the shared search/request/cost budgets;
-raw search results are discarded and independently fetched pages remain the
+invoke one transient Firecrawl search under the shared search/request/cost budgets;
+raw Firecrawl search results are discarded and independently fetched pages remain the
 only publication evidence. The default submission declaration therefore still
 lists no model or search provider.
 

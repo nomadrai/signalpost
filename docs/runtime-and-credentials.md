@@ -31,7 +31,7 @@ and any provider provisioning details still need confirmation for deployment.
 |---|---|---|
 | Find an existing company by name/number | Static viewer filters generated cards in the browser | None |
 | Research a company from its number | Batch runner reads the identity snapshot, calls public official endpoints and crawls candidate company pages | No model or paid-search key in the default path |
-| Discover website candidates | Opt-in bounded planner with transient Brave search; standalone experiment also available | Model credentials plus `BRAVE_SEARCH_API_KEY`, declared search price and search allowance |
+| Discover website candidates | Opt-in bounded planner with transient Firecrawl Search | Model credentials plus positive search allowance; `FIRECRAWL_API_KEY` is optional for the free/keyless path |
 | Extract hiring/activity or select a research action | Optional evidence assistant and single-action planner; current answers/synthesis remain deterministic | `GROQ_API_KEY(S)` or `SIGNALPOST_MODEL_API_KEY(S)` with `--model-assist` or `--planner-assist` |
 
 The static viewer does not submit new crawl jobs when a visitor types a company
@@ -41,7 +41,7 @@ result retrieval. That plumbing does not itself require an AI model.
 `scripts/ask_agent.py` uses deterministic filtering of existing profile evidence.
 Its name does not mean it makes a hosted-model request. Likewise,
 `--discover-websites` constructs legal-name domain candidates; it does not enable
-Brave search or any model provider.
+Firecrawl Search or any model provider.
 
 ## Optional provider integration
 
@@ -73,9 +73,9 @@ retrieval. Exact-company publication remains deterministic.
 `--planner-assist` enables that bounded planner explicitly. It receives the
 identity snapshot and an allow-list of deterministic website candidates, then
 returns one `fetch_url`, `search_company`, or `stop` action. The controller
-rejects arbitrary URLs and malformed searches. If Brave credentials and a
-positive `MAX_SEARCH_CALLS` allowance and declared search price are present, one transient search may
-produce a candidate URL; raw search results are discarded before the profile is
+rejects arbitrary URLs and malformed searches. If a positive `MAX_SEARCH_CALLS`
+allowance is present, one transient Firecrawl search may produce a candidate URL;
+raw search results are discarded before the profile is
 written. The website crawler independently fetches and identity-gates the URL.
 This is one model action per company, followed by at most one search and the
 bounded website task. `stop` ends planner work; other requested deterministic
@@ -126,22 +126,30 @@ allocation. Missing or invalid pricing disables those model calls. Reservations
 are not refunded after failure, so reports represent a cost upper bound rather
 than an invoice. Every retry reserves fresh request/token/cost allowances.
 
-Search additionally requires `BRAVE_SEARCH_API_KEY`, positive `MAX_SEARCH_CALLS`
-and an explicit finite `SIGNALPOST_SEARCH_COST_PER_CALL_USD` for the selected
-plan. Zero is allowed only as a declaration of a free allocation. Search prices
-and retention rights depend on that plan; a key does not establish either.
+Firecrawl Search additionally requires positive `MAX_SEARCH_CALLS`. Its API key
+is optional for the documented free/keyless path; set `FIRECRAWL_API_KEY` for a
+configured account and higher limits. Firecrawl documents 2 credits per 10
+results, 1,000 free monthly credits, and a 10-searches-per-minute free-plan
+limit. `FIRECRAWL_SEARCH_COST_PER_CALL_USD` declares the USD reservation for
+the selected allocation and defaults to zero for a free allocation; credits
+remain a provider-side quota separate from USD budgeting.
+The development probe initially reached `https://api.firecrawl.dev/v2/search`
+without a key and received HTTP 403. With a configured Firecrawl key, the same
+probe returned HTTP 200, three candidate URLs and `creditsUsed: 2`. Therefore
+the adapter supports both documented modes, but this runtime currently needs
+the configured key for successful access.
 
-The existing standalone Brave script remains a separate experiment. The
-`--planner-assist` adapter uses the shared HTTP request ledger, monetary
-reservations, deadlines and terminal output, but is not part of the default
-bounded run. Setting the Brave environment variable alone does not add search
-to `run_batch.py`.
+The old standalone Brave script is retained as a historical experiment but is
+not used by the bounded runner. The `--planner-assist` Firecrawl adapter uses
+the shared HTTP request ledger, monetary reservations, deadlines and terminal
+output, but is not part of the default bounded run. Firecrawl result snippets
+are transient and never become evidence; the independently fetched page does.
 
 Groq's built-in browser search is also not the active evidence connector:
 provider documentation says it is incompatible with structured outputs, and
 its final answer contains provider-selected web snippets rather than the
 replayable page captures required by the Signalpost evidence contract. The
-bounded planner therefore uses the transient Brave adapter only when explicitly
+bounded planner therefore uses the transient Firecrawl adapter only when explicitly
 enabled and retains no raw search response; independently fetched pages remain
 the only publication evidence.
 
@@ -189,9 +197,11 @@ template. Set positive `MAX_LLM_CALLS`, `MAX_LLM_TOKENS` and `MAX_COST_USD`
 allowances using the example above. A single key is sufficient; multiple Groq
 keys do not increase organization-wide quotas.
 
-For search, also set `BRAVE_SEARCH_API_KEY`, positive `MAX_SEARCH_CALLS` and
-the chosen plan's USD-per-request `SIGNALPOST_SEARCH_COST_PER_CALL_USD`. Without
-search, leave the Brave key empty and `MAX_SEARCH_CALLS=0`. Public registry
+For search, set positive `MAX_SEARCH_CALLS`. `FIRECRAWL_API_KEY` is optional;
+the documented keyless free path can be used without it. Set
+`FIRECRAWL_SEARCH_COST_PER_CALL_USD` if the selected allocation has a declared
+USD charge; leave it at `0` for the free monthly-credit allocation. Without
+search, use `MAX_SEARCH_CALLS=0`. Public registry
 requests and direct company-page retrieval need no API key.
 
 Load the file into the same Bash session that runs the batch:

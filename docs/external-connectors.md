@@ -38,18 +38,19 @@ requirement):
 - URL, redirect chain, retrieval time, content hash, exact-entity proof, cost, and latency for every publication.
 
 Any promoted search connector must also use the batch's shared request ledger,
-deadline supervisor and monetary reservation pool. `BRAVE_SEARCH_API_KEY` is
-consumed by the explicit `--planner-assist` path only when the shared search
-allowance is positive; the standalone script remains available for experiments.
-The planner stores only a deterministic candidate URL after a transient search,
-then the normal crawler and exact-entity gate decide publication. A search key
-is not an AI model key.
+deadline supervisor and monetary reservation pool. The explicit
+`--planner-assist` path uses Firecrawl Search; its API key is optional for the
+documented free/keyless path. The planner stores only a deterministic candidate
+URL after a transient search, then the normal crawler and exact-entity gate
+decide publication. A search key is not an AI model key.
 
 Groq GPT-OSS browser search is not treated as a replacement for this connector:
 the current Groq documentation states that browser search is incompatible with
 structured outputs and returns model-composed snippets. It can be evaluated as
 a separately declared provider feature after source-retention and evidence
-mapping are established.
+mapping are established. Firecrawl is used here only for candidate discovery;
+its result snippets are never evidence and the independently fetched company
+page remains authoritative.
 
 ## Norwegian company sentiment
 
