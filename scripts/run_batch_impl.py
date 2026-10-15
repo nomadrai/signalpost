@@ -46,13 +46,30 @@ WORKPLACE_DIAGNOSTIC_PRIORITY = [
     "registry_live", "locations", "planner", "website", "financials", "roles", "hiring", "activity",
     "website_discovery", "model_signals", "group", "financial_history",
 ]
+CATEGORY_PROFILE_TARGETS = {
+    "accounts-diagnostic": "financials",
+    "leadership-diagnostic": "roles",
+    "workplaces-diagnostic": "locations",
+    "website-diagnostic": "website",
+    "hiring-diagnostic": "hiring",
+    "activity-diagnostic": "activity",
+    "website-discovery-diagnostic": "website_discovery",
+    "group-diagnostic": "group",
+    "financial-history-diagnostic": "financial_history",
+}
+COVERAGE_PROFILE_CHOICES = ("default", "workplace-diagnostic", *CATEGORY_PROFILE_TARGETS)
 
 
 def priority_for_profile(profile: str) -> list[str]:
     """Return an explicit field-family order without changing the default run."""
     if profile == "workplace-diagnostic":
         return list(WORKPLACE_DIAGNOSTIC_PRIORITY)
-    return list(DEFAULT_PRIORITY)
+    target = CATEGORY_PROFILE_TARGETS.get(profile)
+    if not target:
+        return list(DEFAULT_PRIORITY)
+    prerequisites = {"hiring": ["website"], "activity": ["website"], "website_discovery": ["website"]}.get(target, [])
+    selected = ["registry_live", *prerequisites, target]
+    return selected + [module for module in DEFAULT_PRIORITY if module not in selected]
 
 
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -186,8 +203,8 @@ def main() -> None:
     parser.add_argument("--discover-websites", action="store_true", help="Try conservative legal-name domain candidates after the registry website")
     parser.add_argument("--model-assist", action="store_true", help="Use an optional OpenAI-compatible model only on retained exact-company page captures")
     parser.add_argument("--planner-assist", action="store_true", help="Use an optional bounded model planner for website candidate selection")
-    parser.add_argument("--coverage-profile", choices=("default", "workplace-diagnostic"), default="default",
-                        help="Keep default scoring order or opt into a workplace-first diagnostic allocation")
+    parser.add_argument("--coverage-profile", choices=COVERAGE_PROFILE_CHOICES, default="default",
+                        help="Keep default scoring order or opt into a category-priority diagnostic allocation")
     args = parser.parse_args()
 
     started_at = utc_now()
@@ -219,6 +236,8 @@ def main() -> None:
     requested_modules = [item.strip() for item in args.modules.split(",") if item.strip()]
     if args.discover_websites and "website_discovery" not in requested_modules:
         requested_modules.append("website_discovery")
+    if args.coverage_profile == "website-discovery-diagnostic" and not args.discover_websites:
+        parser.error("--coverage-profile website-discovery-diagnostic requires --discover-websites")
     if args.model_assist and "model_signals" not in requested_modules:
         requested_modules.append("model_signals")
     if args.planner_assist and "planner" not in requested_modules:

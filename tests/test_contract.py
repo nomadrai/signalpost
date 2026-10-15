@@ -24,7 +24,7 @@ from norway_company_agent.schema import build_contract_envelope, stable_claim_id
 from norway_company_agent.viewer import build_viewer  # noqa: E402
 from audit_batch_checkpoint import audit_checkpoint  # noqa: E402
 from run_batch import recover_checkpoint  # noqa: E402
-from run_batch_impl import DEFAULT_PRIORITY, priority_for_profile  # noqa: E402
+from run_batch_impl import CATEGORY_PROFILE_TARGETS, COVERAGE_PROFILE_CHOICES, DEFAULT_PRIORITY, priority_for_profile  # noqa: E402
 
 
 VALID_ORG = "993578843"
@@ -36,6 +36,21 @@ def test_workplace_diagnostic_profile_is_opt_in_and_default_order_is_unchanged()
     diagnostic = priority_for_profile("workplace-diagnostic")
     assert diagnostic.index("locations") < diagnostic.index("website")
     assert diagnostic.index("locations") < diagnostic.index("website_discovery")
+
+
+@pytest.mark.parametrize("profile,target", sorted(CATEGORY_PROFILE_TARGETS.items()))
+def test_each_category_profile_promotes_its_target_without_dropping_modules(profile, target):
+    priority = priority_for_profile(profile)
+    assert set(priority) == set(DEFAULT_PRIORITY)
+    assert priority.index(target) <= DEFAULT_PRIORITY.index(target)
+    if target in {"hiring", "activity", "website_discovery"}:
+        assert priority.index("website") < priority.index(target)
+
+
+def test_coverage_profile_cli_choices_are_explicit():
+    assert "default" in COVERAGE_PROFILE_CHOICES
+    assert "workplaces-diagnostic" in COVERAGE_PROFILE_CHOICES
+    assert "website-discovery-diagnostic" in COVERAGE_PROFILE_CHOICES
 
 
 def _profile() -> dict:
@@ -192,6 +207,8 @@ def test_viewer_escapes_fetched_text_and_builds_compare_and_changes(tmp_path: Pa
     assert "Ask about this company" in profile
     assert "View evidence record" in profile
     assert "max-width: 1380px" in index
+    assert "Explicit coverage" in index
+    assert "workplaces-diagnostic" in index
 
 
 def test_validate_evidence_preserves_unicode_line_separators_in_jsonl(tmp_path: Path):

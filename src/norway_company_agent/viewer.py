@@ -124,6 +124,19 @@ h3 { font-size: 1.26rem; line-height: 1.2; margin: 0 0 8px; }
 .badge.ambiguous, .badge.blocked { color: #8a5d0b; }
 .badge.failed { color: var(--red); }
 .empty { padding: 28px; border: 1px dashed var(--line); border-radius: var(--radius-sm); color: var(--muted); text-align: center; background: var(--paper-2); }
+.coverage-panel { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); gap: 20px; align-items: end; margin: 28px 0; padding: 22px; background: var(--forest-dark); color: var(--paper); border-radius: var(--radius); }
+.coverage-panel .kicker { color: var(--gold); }
+.coverage-panel h2 { margin-top: 9px; color: var(--paper); }
+.coverage-panel p { margin: 0; color: var(--paper-3); }
+.coverage-controls { display: grid; gap: 9px; }
+.coverage-controls label { color: var(--paper-3); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.coverage-select { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.24); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.coverage-detail { display: grid; gap: 8px; min-height: 100%; padding: 15px; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; background: rgba(255,255,255,.06); }
+.coverage-detail strong { color: var(--gold); }
+.coverage-command { display: block; padding: 9px 10px; overflow-wrap: anywhere; background: rgba(0,0,0,.22); border-radius: 7px; color: var(--paper-3); font: .76rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.coverage-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.coverage-actions .button.secondary { border-color: var(--gold); color: var(--gold); }
+.coverage-actions .button.secondary:hover { background: rgba(237,164,46,.12); }
 
 .hero { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 24px; align-items: stretch; margin-bottom: 22px; }
 .hero-main { padding: 30px; }
@@ -200,6 +213,7 @@ h3 { font-size: 1.26rem; line-height: 1.2; margin: 0 0 8px; }
   .nav { justify-content: flex-end; }
   .nav a { padding: 7px 6px; font-size: .76rem; }
   .page { padding: 34px 16px 60px; }
+  .coverage-panel { grid-template-columns: 1fr; align-items: stretch; }
   .page-head { display: block; }
   .hero-main { padding: 22px; }
   .metric-grid { gap: 8px; }
@@ -247,6 +261,20 @@ def _sprite() -> str:
     return "<svg aria-hidden=\"true\" width=\"0\" height=\"0\" style=\"position:absolute\"><defs>" + "".join(
         f'<symbol id="icon-{name}" viewBox="0 0 24 24">{paths}</symbol>' for name, paths in ICON_NAMES.items()
     ) + "</defs></svg>"
+
+
+COVERAGE_PROFILES = [
+    {"id": "default", "label": "Default balanced profile", "focus": "Keeps the current submission order unchanged.", "note": "Use this for the normal Builderr run."},
+    {"id": "accounts-diagnostic", "label": "Annual accounts priority", "focus": "Moves annual accounts ahead of optional website work.", "note": "Useful when financial coverage matters most."},
+    {"id": "leadership-diagnostic", "label": "Leadership priority", "focus": "Moves registered roles ahead of optional website work.", "note": "Useful when public role coverage matters most."},
+    {"id": "workplaces-diagnostic", "label": "Workplaces priority", "focus": "Moves registered subunits ahead of websites and discovery.", "note": "Useful when workplace coverage matters most."},
+    {"id": "website-diagnostic", "label": "Official website priority", "focus": "Moves registry-linked website crawling earlier.", "note": "Useful for exact-company website recall."},
+    {"id": "hiring-diagnostic", "label": "Hiring priority", "focus": "Fetches a verified website before local hiring extraction.", "note": "Hiring still requires retained first-party evidence."},
+    {"id": "activity-diagnostic", "label": "Activity priority", "focus": "Fetches a verified website before local activity extraction.", "note": "Activity still requires retained dated evidence."},
+    {"id": "website-discovery-diagnostic", "label": "Website discovery priority", "focus": "Runs registry website work before opt-in discovery.", "note": "Requires --discover-websites and remains budgeted."},
+    {"id": "group-diagnostic", "label": "Group structure priority", "focus": "Moves official group structure work earlier.", "note": "Useful when relationships matter most."},
+    {"id": "financial-history-diagnostic", "label": "Account history priority", "focus": "Moves annual-account history work earlier.", "note": "Useful when multi-year context matters most."},
+]
 
 
 def _display_text(value: Any) -> str:
@@ -433,11 +461,17 @@ def _index_body(rows: list[dict[str, Any]]) -> tuple[str, str]:
         name = _safe_text((row.get("identity") or {}).get("name") or (row.get("profile") or {}).get("name") or org)
         status = str(row.get("status") or "not_available")
         cards.append(f'<a class="surface company-card" data-search="{html.escape((org + " " + name).casefold(), quote=True)}" data-status="{html.escape(status, quote=True)}" href="company-{html.escape(org, quote=True)}.html"><span class="card-top">{_badge(status)}{_icon("arrow-up-right")}</span><h2>{html.escape(name)}</h2><span class="org">{html.escape(org)}</span></a>')
-    body = f'''<div class="page"><div class="page-head"><div><div class="kicker">Evidence desk</div><h1>Company profiles,<br><em>without the guesswork.</em></h1><p class="lead">Search public Norwegian company records, compare supported values, and follow every fact back to its source.</p></div><div class="surface dark pad"><span class="kicker">Snapshot</span><h2 style="color:var(--paper);margin-top:10px">{len(rows)}<br><span style="font-family:inherit;font-size:1rem;letter-spacing:0">records ready to inspect</span></h2></div></div><div class="toolbar"><div class="control" style="flex:1"><label for="search">Find a company</label><div class="input-wrap">{_icon("search")}<input class="input" id="search" type="search" placeholder="Name or organisation number" autocomplete="off"></div></div><div class="control"><label for="status">Availability</label><select class="select" id="status"><option value="">All states</option><option value="available">Available</option><option value="not_available">Not available</option><option value="ambiguous">Needs review</option><option value="blocked">Blocked</option><option value="failed">Failed</option></select></div><button class="button secondary" id="clear" type="button">{_icon("refresh")} Reset</button></div><div class="count-line"><strong id="count">{len(rows)} companies</strong><span class="muted">Identity is anchored in the supplied registry snapshot.</span></div><div id="company-list" class="company-grid">{"".join(cards) or '<div class="empty">No profiles found.</div>'}</div></div>'''
-    script = """
+    options = "".join(f'<option value="{html.escape(item["id"], quote=True)}">{html.escape(item["label"])}</option>' for item in COVERAGE_PROFILES)
+    coverage_data = _json_script(COVERAGE_PROFILES)
+    body = f'''<div class="page"><div class="page-head"><div><div class="kicker">Evidence desk</div><h1>Company profiles,<br><em>without the guesswork.</em></h1><p class="lead">Search public Norwegian company records, compare supported values, and follow every fact back to its source.</p></div><div class="surface dark pad"><span class="kicker">Snapshot</span><h2 style="color:var(--paper);margin-top:10px">{len(rows)}<br><span style="font-family:inherit;font-size:1rem;letter-spacing:0">records ready to inspect</span></h2></div></div><section class="coverage-panel" aria-labelledby="coverage-title"><div><div class="kicker">Explicit coverage</div><h2 id="coverage-title">Prioritize what matters now.</h2><p>The default profile stays unchanged. Choose a diagnostic profile when one category deserves the next request allocation.</p></div><div class="coverage-controls"><label for="coverage-profile">Coverage profile</label><select class="coverage-select" id="coverage-profile">{options}</select><div class="coverage-detail" id="coverage-detail" aria-live="polite"></div></div></section><div class="toolbar"><div class="control" style="flex:1"><label for="search">Find a company</label><div class="input-wrap">{_icon("search")}<input class="input" id="search" type="search" placeholder="Name or organisation number" autocomplete="off"></div></div><div class="control"><label for="status">Availability</label><select class="select" id="status"><option value="">All states</option><option value="available">Available</option><option value="not_available">Not available</option><option value="ambiguous">Needs review</option><option value="blocked">Blocked</option><option value="failed">Failed</option></select></div><button class="button secondary" id="clear" type="button">{_icon("refresh")} Reset</button></div><div class="count-line"><strong id="count">{len(rows)} companies</strong><span class="muted">Identity is anchored in the supplied registry snapshot.</span></div><div id="company-list" class="company-grid">{"".join(cards) or '<div class="empty">No profiles found.</div>'}</div></div>'''
+    script = f"""
 const search=document.querySelector('#search'), status=document.querySelector('#status'), count=document.querySelector('#count'), clear=document.querySelector('#clear');
-function filter(){const query=(search.value||'').toLowerCase().trim(), state=status.value;let visible=0;document.querySelectorAll('.company-card').forEach(card=>{const show=(!query||card.dataset.search.includes(query))&&(!state||card.dataset.status===state);card.hidden=!show;if(show)visible+=1;});count.textContent=visible+' compan'+(visible===1?'y':'ies');}
-search.addEventListener('input',filter);status.addEventListener('change',filter);clear.addEventListener('click',()=>{search.value='';status.value='';filter();search.focus();});
+function filter(){{const query=(search.value||'').toLowerCase().trim(), state=status.value;let visible=0;document.querySelectorAll('.company-card').forEach(card=>{{const show=(!query||card.dataset.search.includes(query))&&(!state||card.dataset.status===state);card.hidden=!show;if(show)visible+=1;}});count.textContent=visible+' compan'+(visible===1?'y':'ies');}}
+search.addEventListener('input',filter);status.addEventListener('change',filter);clear.addEventListener('click',()=>{{search.value='';status.value='';filter();search.focus();}});
+const coverageProfiles={coverage_data}, coverageSelect=document.querySelector('#coverage-profile'), coverageDetail=document.querySelector('#coverage-detail');
+function renderCoverage(){{const profile=coverageProfiles.find(item=>item.id===coverageSelect.value)||coverageProfiles[0];const discovery=profile.id==='website-discovery-diagnostic'?' --discover-websites':'';const command='python scripts/run_batch.py --input <organisations.jsonl> --bulk <registry.csv-or-universe.jsonl> --profiles-output <run>/profiles.jsonl --output <run>/envelopes.jsonl --report <run>/report.json --run-id <run-id> --expected-count <count> --coverage-profile '+profile.id+discovery;coverageDetail.innerHTML='<strong>'+escapeCoverage(profile.label)+'</strong><p>'+escapeCoverage(profile.focus)+' '+escapeCoverage(profile.note)+'</p><code class="coverage-command">'+escapeCoverage(command)+'</code><div class="coverage-actions"><button type="button" class="button secondary small" id="copy-coverage">Copy command</button><span class="muted" id="coverage-copy-status">The viewer is a snapshot. Run the command to create a new allocation.</span></div>';document.querySelector('#copy-coverage').addEventListener('click',async()=>{{try{{await navigator.clipboard.writeText(command);document.querySelector('#coverage-copy-status').textContent='Command copied.';}}catch(_){{document.querySelector('#coverage-copy-status').textContent='Copy unavailable. Select the command above.';}}}});}}
+function escapeCoverage(value){{return String(value??'').replace(/[&<>"']/g,char=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[char]));}}
+renderCoverage();
 """
     return body, script
 
