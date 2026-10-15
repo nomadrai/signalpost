@@ -276,7 +276,20 @@ def _synthesis_value(value: Any) -> str:
         return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(", ", ": "))
     if isinstance(value, list):
         return ", ".join(_synthesis_value(item) for item in value)
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, (int, float)):
+        return f"{value:,.0f}" if float(value).is_integer() else f"{value:,.2f}"
     return str(value)
+
+
+def _synthesis_period(value: Any) -> str:
+    if isinstance(value, dict):
+        start = value.get("fraDato") or value.get("from") or value.get("start")
+        end = value.get("tilDato") or value.get("to") or value.get("end")
+        if start and end:
+            return f"from {start} to {end}"
+    return _synthesis_value(value)
 
 
 def _synthesis(profile: dict[str, Any], claims: list[dict[str, Any]], sections: dict[str, Any], changes: list[dict[str, Any]]) -> dict[str, Any]:
@@ -309,7 +322,7 @@ def _synthesis(profile: dict[str, Any], claims: list[dict[str, Any]], sections: 
         selected = account_fields[:4]
         first = selected[0]
         period = first.get("reporting_period")
-        period_text = f" for {period}" if period else ""
+        period_text = f" ({_synthesis_period(period)})" if period else ""
         details = "; ".join(f"{item['field'].split('.')[-1].replace('_', ' ')}: {_synthesis_value(item['value'])}" for item in selected)
         sentences.append({"text": f"The latest available annual accounts{period_text} report {details}.", "claim_ids": [item["claim_id"] for item in selected]})
     role = next((item for item in claims if item["field"] == "leadership.role"), None)
