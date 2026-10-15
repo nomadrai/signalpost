@@ -181,6 +181,7 @@ def test_viewer_escapes_fetched_text_and_builds_compare_and_changes(tmp_path: Pa
     assert "signalpost-data" not in profile
     assert "Ask about this company" in profile
     assert "View evidence record" in profile
+    assert "max-width: 1380px" in index
 
 
 def test_validate_evidence_preserves_unicode_line_separators_in_jsonl(tmp_path: Path):

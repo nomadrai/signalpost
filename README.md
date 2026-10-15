@@ -187,6 +187,15 @@ PYTHONPATH=src python scripts/build_viewer.py <run>/envelopes.jsonl <run>/viewer
 
 The viewer includes searchable company cards, profile facts with source links and dates, explicit unknown states, a field-aligned three-column compare page, change history, per-section freshness, and a bounded evidence question panel. Its visual system uses warm paper, forest green, and marigold accents with consistent outline symbols.
 
+Section availability is run-specific, not a hard-coded default. The profile
+view distinguishes verified evidence, ambiguous identity, a missing candidate,
+and work that was not fetched before the run deadline or request cap. A
+`Not fetched in this run` label means the source task did not execute; it does
+not prove that the company has no workplace or website. A website marked
+`No candidate in identity snapshot` means the supplied identity data had no
+website URL; `Fetched, identity unresolved` means a page was reached but was
+withheld by the exact-company identity gate.
+
 To enable the profile question panel, serve the generated viewer through the
 small local research endpoint. It answers only from the retained profile
 evidence and does not start an unbounded crawl:

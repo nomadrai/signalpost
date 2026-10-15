@@ -17,10 +17,203 @@ from typing import Any
 
 
 CSS = """
-:root{color-scheme:light;--paper:#fbf7f0;--paper-2:#f4ecdd;--paper-3:#ebe0cc;--ink:#191610;--ink-soft:#4b453a;--muted:#6f6759;--forest:#254e2b;--forest-dark:#152d1a;--forest-soft:#dbe9d7;--gold:#eda42e;--gold-soft:#fce8c2;--red:#a44735;--red-soft:#f6ded5;--line:#d8cdbb;--white:#fffdf8;--shadow:0 18px 50px rgba(37,78,43,.08);--radius:18px;--radius-sm:10px}
-*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}body{margin:0;background:var(--paper);color:var(--ink);font-family:"Instrument Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.16;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");mix-blend-mode:multiply;z-index:-1}a{color:var(--forest);text-underline-offset:3px}a:hover{color:var(--forest-dark)}button,input,select,textarea{font:inherit}button{cursor:pointer}::selection{background:var(--gold);color:var(--ink)}:focus-visible{outline:3px solid var(--gold);outline-offset:3px;border-radius:6px}.skip-link{position:absolute;left:-9999px;top:12px;background:var(--forest-dark);color:var(--paper);padding:10px 14px;border-radius:8px;z-index:10}.skip-link:focus{left:14px}.site-header{position:sticky;top:0;z-index:5;background:rgba(251,247,240,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}.header-inner{max-width:1320px;margin:auto;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:24px}.brand{display:inline-flex;align-items:center;gap:11px;color:var(--ink);font-weight:800;letter-spacing:-.02em;text-decoration:none}.brand-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--forest);color:var(--gold);box-shadow:0 0 0 5px var(--forest-soft)}.brand-mark .icon{width:18px;height:18px}.nav{display:flex;gap:4px;align-items:center;flex-wrap:wrap}.nav a{display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border-radius:8px;color:var(--muted);font-size:.85rem;font-weight:700;text-decoration:none}.nav a:hover,.nav a.active{background:var(--paper-2);color:var(--forest-dark)}.nav a.active{box-shadow:inset 0 -2px var(--gold)}.icon{width:1em;height:1em;display:inline-block;flex:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;fill:none}.icon-lg{width:22px;height:22px}.container{max-width:1320px;margin:auto;padding:0 28px}.page{padding:52px 0 84px}.page-head{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:32px}.page-head h1{max-width:780px}.kicker{display:inline-flex;align-items:center;gap:9px;color:var(--forest);font-size:.72rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase}.kicker:before{content:"";width:28px;height:1px;background:currentColor;opacity:.65}h1,h2,h3{font-family:"Fraunces",Georgia,"Times New Roman",serif;letter-spacing:-.025em;text-wrap:balance}h1{font-size:clamp(2.2rem,5vw,4.5rem);line-height:1.02;margin:10px 0 12px}h2{font-size:clamp(1.55rem,2.8vw,2.25rem);line-height:1.1;margin:0 0 9px}h3{font-size:1.26rem;line-height:1.2;margin:0 0 8px}.lead{max-width:67ch;font-size:1.08rem;color:var(--ink-soft)}.muted{color:var(--muted)}.eyebrow{color:var(--forest);font-size:.72rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.surface{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}.surface.pad{padding:22px}.surface.dark{background:var(--forest-dark);color:var(--paper);border-color:var(--forest-dark)}.surface.gold{background:var(--gold);border-color:var(--gold);color:var(--ink)}.toolbar{display:flex;align-items:end;gap:12px;flex-wrap:wrap;padding:14px 16px;background:var(--paper-2);border:1px solid var(--line);border-radius:var(--radius-sm);margin:22px 0}.control{display:grid;gap:5px;min-width:230px}.control label,.field-label{color:var(--muted);font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.input-wrap{position:relative}.input-wrap .icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--forest);width:17px;height:17px}.input,.select{width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--white);color:var(--ink)}.input-wrap .input{padding-left:38px}.input:hover,.select:hover{border-color:var(--forest)}.button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:9px 14px;border:1px solid var(--forest);border-radius:8px;background:var(--forest);color:var(--paper);font-weight:800;text-decoration:none}.button:hover{background:var(--forest-dark);color:var(--paper)}.button.secondary{background:transparent;color:var(--forest)}.button.secondary:hover{background:var(--forest-soft)}.button.small{min-height:34px;padding:6px 10px;font-size:.82rem}.count-line{display:flex;justify-content:space-between;gap:12px;margin:16px 0 12px;font-size:.9rem}.company-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(275px,1fr));gap:16px}.company-card{display:flex;flex-direction:column;min-height:174px;padding:19px;color:var(--ink);text-decoration:none;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}.company-card:hover,.company-card:focus{transform:translateY(-3px);border-color:var(--forest);box-shadow:0 22px 46px rgba(37,78,43,.13)}.company-card[hidden]{display:none}.company-card .card-top{display:flex;justify-content:space-between;align-items:center;gap:8px}.company-card h2{font-size:1.35rem;margin-top:24px}.company-card .org{margin-top:auto;font-variant-numeric:tabular-nums;color:var(--muted);font-size:.86rem}.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid currentColor;border-radius:999px;padding:4px 9px;font-size:.72rem;font-weight:800;line-height:1}.badge.available{color:var(--forest)}.badge.not_available,.badge.not_applicable{color:var(--muted)}.badge.ambiguous,.badge.blocked{color:#8a5d0b}.badge.failed{color:var(--red)}.empty{padding:28px;border:1px dashed var(--line);border-radius:var(--radius-sm);color:var(--muted);text-align:center;background:var(--paper-2)}.hero{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);gap:24px;align-items:stretch;margin-bottom:22px}.hero-main{padding:30px}.hero-main h1{max-width:800px}..hero-meta{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}.meta-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;color:var(--ink-soft);font-size:.82rem;background:var(--paper)}.hero-side{padding:22px;background:var(--forest-dark);color:var(--paper);border-radius:var(--radius);border:1px solid var(--forest-dark)}.hero-side .kicker{color:var(--gold)}.hero-side h2{font-size:1.55rem;margin-top:18px}.proof-list,.unknown-list,.section-list{list-style:none;padding:0;margin:0}.proof-list li,.unknown-list li{display:flex;align-items:flex-start;gap:10px;padding:11px 0;border-top:1px solid rgba(255,255,255,.17)}.proof-list li:first-child,.unknown-list li:first-child{border-top:0}.proof-list .icon{margin-top:3px;color:var(--gold)}.unknown-list li{border-color:var(--line)}.unknown-list .icon{color:#a87012;margin-top:3px}.metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0}.metric{padding:17px;background:var(--paper-2);border:1px solid var(--line);border-radius:var(--radius-sm)}.metric .metric-value{display:block;margin-top:8px;font-size:1.28rem;font-weight:800;letter-spacing:-.025em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.metric .metric-note{display:block;margin-top:4px;color:var(--muted);font-size:.76rem}.two-col{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(280px,.7fr);gap:24px;align-items:start}.section-heading{display:flex;align-items:end;justify-content:space-between;gap:16px;margin:34px 0 14px}.section-heading h2{margin:0}.section-heading .section-icon{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--forest-soft);color:var(--forest)}.availability{display:grid;gap:7px}.availability-row{display:grid;grid-template-columns:26px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--line)}.availability-row:first-child{border-top:0}.availability-row .icon{color:var(--forest)}.freshness{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-size:.76rem}.claim-list{display:grid;gap:0}.claim{padding:18px 0;border-top:1px solid var(--line)}.claim:first-child{border-top:0}.claim-head{display:flex;align-items:start;justify-content:space-between;gap:12px}.claim-label{color:var(--ink-soft);font-size:.83rem;font-weight:800}.claim-value{margin-top:8px;font-size:1rem;white-space:pre-wrap;overflow-wrap:anywhere}.claim-value.json{font-size:.86rem;line-height:1.45;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--paper-2);border-radius:8px;padding:11px;max-height:180px;overflow:auto}.source-row{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:10px;color:var(--muted);font-size:.78rem}.source-row a{display:inline-flex;align-items:center;gap:5px;font-weight:700}.claim-details{margin-top:10px}.claim-details summary{cursor:pointer;color:var(--forest);font-size:.78rem;font-weight:800}.evidence-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px;color:var(--muted);font-size:.76rem}.synthesis-sentence{margin:0;padding:12px 0;border-top:1px solid var(--line)}.synthesis-sentence:first-child{border-top:0}.proof-link{display:inline-flex;align-items:center;gap:4px;margin-left:5px;font-size:.75rem;font-weight:800}.research{margin-top:24px}.research-form{display:flex;gap:9px;align-items:stretch}.research-form textarea{flex:1;min-height:48px;resize:vertical;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--white);color:var(--ink)}.research-output{margin-top:15px}.research-fact{padding:12px 0;border-top:1px solid var(--line)}.research-fact:first-child{border-top:0}.research-status{color:var(--muted);font-size:.86rem}.compare-shell{padding:22px}.compare-table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}.compare-table,.changes-table{width:100%;border-collapse:collapse;min-width:720px}.compare-table th,.compare-table td,.changes-table th,.changes-table td{padding:13px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}.compare-table th{background:var(--forest-dark);color:var(--paper);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase}.compare-table th:first-child{min-width:190px}.compare-table td:first-child{font-weight:800;color:var(--ink-soft)}.compare-table tr:last-child td,.changes-table tr:last-child td{border-bottom:0}.compare-cell{min-width:170px}.compare-value{display:block;max-width:260px;overflow-wrap:anywhere}.compare-link{display:inline-flex;align-items:center;gap:4px;margin-top:7px;font-size:.74rem;font-weight:800}.changes-table-wrap{overflow:auto;background:var(--white);border:1px solid var(--line);border-radius:var(--radius)}.changes-table th{background:var(--paper-2);font-size:.76rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}.changes-table td{font-size:.88rem}.change-value{max-width:230px;white-space:pre-wrap;overflow-wrap:anywhere}.footer{max-width:1320px;margin:auto;padding:24px 28px 42px;color:var(--muted);font-size:.78rem;display:flex;justify-content:space-between;gap:20px;border-top:1px solid var(--line)}@media(max-width:900px){.hero,.two-col{grid-template-columns:1fr}.metric-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:640px){.header-inner,.container{padding-left:16px;padding-right:16px}.header-inner{align-items:flex-start}.nav{justify-content:flex-end}.nav a{padding:7px 6px;font-size:.76rem}.page{padding-top:34px}.page-head{display:block}.hero-main{padding:22px}.metric-grid{gap:8px}.metric{padding:13px}.metric .metric-value{font-size:1.05rem}.research-form{display:grid}.evidence-grid{grid-template-columns:1fr}.footer{display:block;padding-left:16px;padding-right:16px}.footer span{display:block;margin-top:8px}}
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
-.hero-meta{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}.hero-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:22px}.button.gold{background:var(--gold);border-color:var(--gold);color:var(--ink)}.button.gold:hover{background:#dd8a17;border-color:#dd8a17}
+:root {
+  color-scheme: light;
+  --paper: #fbf7f0;
+  --paper-2: #f4ecdd;
+  --paper-3: #ebe0cc;
+  --ink: #191610;
+  --ink-soft: #4b453a;
+  --muted: #6f6759;
+  --forest: #254e2b;
+  --forest-dark: #152d1a;
+  --forest-soft: #dbe9d7;
+  --gold: #eda42e;
+  --red: #a44735;
+  --line: #d8cdbb;
+  --white: #fffdf8;
+  --shadow: 0 18px 50px rgba(37, 78, 43, .08);
+  --radius: 18px;
+  --radius-sm: 10px;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: .16;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+  z-index: -1;
+}
+a { color: var(--forest); text-underline-offset: 3px; }
+a:hover { color: var(--forest-dark); }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+::selection { background: var(--gold); color: var(--ink); }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; border-radius: 6px; }
+
+.skip-link { position: absolute; left: -9999px; top: 12px; z-index: 10; padding: 10px 14px; background: var(--forest-dark); color: var(--paper); border-radius: 8px; }
+.skip-link:focus { left: 14px; }
+.site-header { position: sticky; top: 0; z-index: 5; background: rgba(251, 247, 240, .94); border-bottom: 1px solid var(--line); backdrop-filter: blur(14px); }
+.header-inner { max-width: 1320px; margin: auto; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.brand { display: inline-flex; align-items: center; gap: 11px; color: var(--ink); font-weight: 800; letter-spacing: -.02em; text-decoration: none; }
+.brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--forest); color: var(--gold); box-shadow: 0 0 0 5px var(--forest-soft); }
+.brand-mark .icon { width: 18px; height: 18px; }
+.nav { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.nav a { display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border-radius: 8px; color: var(--muted); font-size: .85rem; font-weight: 700; text-decoration: none; }
+.nav a:hover, .nav a.active { background: var(--paper-2); color: var(--forest-dark); }
+.nav a.active { box-shadow: inset 0 -2px var(--gold); }
+.icon { width: 1em; height: 1em; display: inline-block; flex: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+
+.page { max-width: 1380px; margin: 0 auto; padding: 52px 28px 84px; }
+.page-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 32px; }
+.page-head h1 { max-width: 780px; }
+.kicker { display: inline-flex; align-items: center; gap: 9px; color: var(--forest); font-size: .72rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+.kicker::before { content: ""; width: 28px; height: 1px; background: currentColor; opacity: .65; }
+h1, h2, h3 { font-family: "Fraunces", Georgia, "Times New Roman", serif; letter-spacing: -.025em; text-wrap: balance; }
+h1 { font-size: clamp(2.2rem, 5vw, 4.5rem); line-height: 1.02; margin: 10px 0 12px; }
+h2 { font-size: clamp(1.55rem, 2.8vw, 2.25rem); line-height: 1.1; margin: 0 0 9px; }
+h3 { font-size: 1.26rem; line-height: 1.2; margin: 0 0 8px; }
+.lead { max-width: 67ch; font-size: 1.08rem; color: var(--ink-soft); }
+.muted { color: var(--muted); }
+.surface { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.surface.pad { padding: 22px; }
+.surface.dark { background: var(--forest-dark); color: var(--paper); border-color: var(--forest-dark); }
+.surface.gold { background: var(--gold); border-color: var(--gold); color: var(--ink); }
+
+.toolbar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; padding: 14px 16px; background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--radius-sm); margin: 22px 0; }
+.control { display: grid; gap: 5px; min-width: 230px; }
+.control label, .field-label { color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.input-wrap { position: relative; flex: 1; }
+.input-wrap .icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 17px; height: 17px; color: var(--forest); }
+.input, .select { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); color: var(--ink); }
+.input-wrap .input { padding-left: 38px; }
+.input:hover, .select:hover { border-color: var(--forest); }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 9px 14px; border: 1px solid var(--forest); border-radius: 8px; background: var(--forest); color: var(--paper); font-weight: 800; text-decoration: none; }
+.button:hover { background: var(--forest-dark); color: var(--paper); }
+.button.secondary { background: transparent; color: var(--forest); }
+.button.secondary:hover { background: var(--forest-soft); }
+.button.small { min-height: 34px; padding: 6px 10px; font-size: .82rem; }
+.button.gold { background: var(--gold); border-color: var(--gold); color: var(--ink); }
+.button.gold:hover { background: #dd8a17; border-color: #dd8a17; }
+.count-line { display: flex; justify-content: space-between; gap: 12px; margin: 16px 0 12px; font-size: .9rem; }
+
+.company-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(275px, 1fr)); gap: 16px; }
+.company-card { display: flex; flex-direction: column; min-height: 174px; padding: 19px; color: var(--ink); text-decoration: none; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.company-card:hover, .company-card:focus { transform: translateY(-3px); border-color: var(--forest); box-shadow: 0 22px 46px rgba(37, 78, 43, .13); }
+.company-card[hidden] { display: none; }
+.company-card .card-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.company-card h2 { font-size: 1.35rem; margin-top: 24px; }
+.company-card .org { margin-top: auto; color: var(--muted); font-size: .86rem; font-variant-numeric: tabular-nums; }
+.badge { display: inline-flex; align-items: center; gap: 6px; border: 1px solid currentColor; border-radius: 999px; padding: 4px 9px; font-size: .72rem; font-weight: 800; line-height: 1; white-space: nowrap; }
+.badge.available { color: var(--forest); }
+.badge.not_available, .badge.not_applicable { color: var(--muted); }
+.badge.ambiguous, .badge.blocked { color: #8a5d0b; }
+.badge.failed { color: var(--red); }
+.empty { padding: 28px; border: 1px dashed var(--line); border-radius: var(--radius-sm); color: var(--muted); text-align: center; background: var(--paper-2); }
+
+.hero { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 24px; align-items: stretch; margin-bottom: 22px; }
+.hero-main { padding: 30px; }
+.hero-main h1 { max-width: 800px; }
+.hero-meta, .hero-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.hero-meta { margin: 18px 0; }
+.hero-actions { margin-top: 22px; }
+.meta-chip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-soft); font-size: .82rem; background: var(--paper); }
+.hero-side { padding: 22px; background: var(--forest-dark); color: var(--paper); border: 1px solid var(--forest-dark); border-radius: var(--radius); }
+.hero-side .kicker { color: var(--gold); }
+.hero-side h2 { font-size: 1.55rem; margin-top: 18px; }
+.proof-list, .unknown-list { list-style: none; padding: 0; margin: 0; }
+.proof-list li, .unknown-list li { display: flex; align-items: flex-start; gap: 10px; padding: 11px 0; border-top: 1px solid var(--line); }
+.surface.dark .proof-list li { border-color: rgba(255, 255, 255, .17); }
+.proof-list li:first-child, .unknown-list li:first-child { border-top: 0; }
+.proof-list .icon { margin-top: 3px; color: var(--gold); }
+.proof-note { display: block; margin-top: 2px; color: var(--paper-3); font-size: .72rem; font-weight: 400; }
+.unknown-list .icon { margin-top: 3px; color: #a87012; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+.metric { padding: 17px; background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.metric-value { display: block; margin-top: 8px; font-size: 1.28rem; font-weight: 800; letter-spacing: -.025em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.metric-note { display: block; margin-top: 4px; color: var(--muted); font-size: .76rem; }
+.two-col { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, .7fr); gap: 24px; align-items: start; }
+.section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 34px 0 14px; }
+.section-heading h2 { margin: 0; }
+.availability { display: grid; gap: 7px; }
+.availability-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) minmax(132px, auto); align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid var(--line); }
+.availability-row:first-child { border-top: 0; }
+.availability-row > .icon { color: var(--forest); }
+.availability-state { display: grid; justify-items: end; gap: 4px; }
+.state-note { color: var(--muted); font-size: .72rem; text-align: right; }
+.freshness { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: .76rem; }
+.claim-list { display: grid; gap: 0; }
+.claim { padding: 18px 0; border-top: 1px solid var(--line); }
+.claim:first-child { border-top: 0; }
+.claim-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.claim-label { color: var(--ink-soft); font-size: .83rem; font-weight: 800; }
+.claim-value { margin-top: 8px; font-size: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.claim-value.json { max-height: 180px; overflow: auto; padding: 11px; background: var(--paper-2); border-radius: 8px; font: .86rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.source-row { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 10px; color: var(--muted); font-size: .78rem; }
+.source-row a { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; }
+.claim-details { margin-top: 10px; }
+.claim-details summary { cursor: pointer; color: var(--forest); font-size: .78rem; font-weight: 800; }
+.evidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 9px; color: var(--muted); font-size: .76rem; }
+.synthesis-sentence { margin: 0; padding: 12px 0; border-top: 1px solid var(--line); }
+.synthesis-sentence:first-child { border-top: 0; }
+.proof-link { display: inline-flex; align-items: center; gap: 4px; margin-left: 5px; font-size: .75rem; font-weight: 800; }
+.research { margin-top: 24px; }
+.research-form { display: flex; gap: 9px; align-items: stretch; }
+.research-form textarea { flex: 1; min-height: 48px; resize: vertical; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); color: var(--ink); }
+.research-output { margin-top: 15px; }
+.research-fact { padding: 12px 0; border-top: 1px solid var(--line); }
+.research-fact:first-child { border-top: 0; }
+.research-status { color: var(--muted); font-size: .86rem; }
+.compare-shell { padding: 22px; }
+.compare-table-wrap, .changes-table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
+.compare-table, .changes-table { width: 100%; min-width: 720px; border-collapse: collapse; }
+.compare-table th, .compare-table td, .changes-table th, .changes-table td { padding: 13px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+.compare-table th { background: var(--forest-dark); color: var(--paper); font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; }
+.compare-table th:first-child { min-width: 190px; }
+.compare-table td:first-child { color: var(--ink-soft); font-weight: 800; }
+.compare-table tr:last-child td, .changes-table tr:last-child td { border-bottom: 0; }
+.compare-cell { min-width: 170px; }
+.compare-value { display: block; max-width: 260px; overflow-wrap: anywhere; }
+.compare-link { display: inline-flex; align-items: center; gap: 4px; margin-top: 7px; font-size: .74rem; font-weight: 800; }
+.changes-table-wrap { background: var(--white); border-radius: var(--radius); }
+.changes-table th { background: var(--paper-2); color: var(--muted); font-size: .76rem; letter-spacing: .06em; text-transform: uppercase; }
+.changes-table td { font-size: .88rem; }
+.change-value { max-width: 230px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.footer { max-width: 1380px; margin: auto; padding: 24px 28px 42px; color: var(--muted); font-size: .78rem; display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid var(--line); }
+@media (max-width: 900px) { .hero, .two-col { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) {
+  .header-inner { padding-left: 16px; padding-right: 16px; align-items: flex-start; }
+  .nav { justify-content: flex-end; }
+  .nav a { padding: 7px 6px; font-size: .76rem; }
+  .page { padding: 34px 16px 60px; }
+  .page-head { display: block; }
+  .hero-main { padding: 22px; }
+  .metric-grid { gap: 8px; }
+  .metric { padding: 13px; }
+  .metric-value { font-size: 1.05rem; }
+  .availability-row { grid-template-columns: 22px minmax(0, 1fr); }
+  .availability-state { grid-column: 2; justify-items: start; }
+  .state-note { text-align: left; }
+  .research-form { display: grid; }
+  .evidence-grid { grid-template-columns: 1fr; }
+  .footer { display: block; padding-left: 16px; padding-right: 16px; }
+  .footer span { display: block; margin-top: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; } }
 """
 
 
@@ -159,6 +352,31 @@ def _section_freshness(section: str, claims: list[dict[str, Any]]) -> str:
     return max(dates)[:10] if dates else "Date not available"
 
 
+def _section_record(row: dict[str, Any], section: str) -> dict[str, Any]:
+    evidence = (row.get("profile") or {}).get("evidence") or {}
+    key = "locations" if section == "workplaces" else section
+    return evidence.get(key) or {}
+
+
+def _section_note(row: dict[str, Any], section: str, state: str) -> str:
+    record = _section_record(row, section)
+    raw_status = str(record.get("status") or "")
+    note = str(record.get("note") or "").replace("_", " ")
+    if raw_status == "not_fetched":
+        return "Not fetched in this run" if note in {"run deadline", "outbound request cap", "resume budget unknown"} else "Not fetched"
+    if section == "website" and raw_status == "not_found":
+        return "No candidate in identity snapshot" if "No website candidate" in str(record.get("note") or "") else "No verified candidate"
+    if state == "ambiguous":
+        return "Fetched, identity unresolved"
+    if state == "blocked":
+        return "Blocked by source policy or robots"
+    if state == "failed":
+        return "Source request failed"
+    if state == "available":
+        return "Verified evidence present"
+    return "Not available"
+
+
 def _claim_value(claims: list[dict[str, Any]], field: str) -> dict[str, Any] | None:
     return next((claim for claim in claims if claim.get("field") == field), None)
 
@@ -191,12 +409,14 @@ def _profile_body(row: dict[str, Any], *, snapshots: dict[str, dict[str, Any]]) 
     availability = []
     for section, detail in sections.items():
         state = str((detail or {}).get("state") or "not_available")
-        availability.append(f'<div class="availability-row"><span>{_icon(_section_icon(section))}</span><strong>{html.escape(_friendly(section))}</strong><span>{_badge(state)}<small class="freshness">{_icon("calendar")} {_short_date(_section_freshness(section, claims))}</small></span></div>')
+        note = _section_note(row, section, state)
+        availability.append(f'<div class="availability-row"><span>{_icon(_section_icon(section))}</span><strong>{html.escape(_friendly(section))}</strong><span class="availability-state">{_badge(state)}<small class="state-note">{html.escape(note)}</small><small class="freshness">{_icon("calendar")} {_short_date(_section_freshness(section, claims))}</small></span></div>')
     claim_html = "".join(_claim_html(claim, snapshots) for claim in claims)
     municipality = identity.get("municipality") or row.get("profile", {}).get("municipality")
     latest_period = _claim_value(claims, "accounts.0.period")
     period_text = _safe_text(latest_period.get("value")) if latest_period else "Latest period not available"
-    return f'''<div class="page"><p><a class="button secondary small" href="index.html">{_icon("arrow-right")} All companies</a></p><div class="hero"><section class="surface hero-main"><div class="kicker">Company record</div><div class="hero-meta">{_badge(str(row.get("status") or "not_available"))}<span class="meta-chip">{_icon("shield")} Evidence-first</span></div><h1>{html.escape(name)}</h1><p class="lead">Organisation number <strong>{html.escape(org)}</strong>{f' · {html.escape(_display_text(municipality))}' if municipality else ''}</p><div class="hero-actions"><a class="button" href="#research">{_icon("spark")} Ask this profile</a><a class="button secondary" href="#facts">{_icon("file")} Browse evidence</a></div></section><aside class="hero-side"><div class="kicker">At a glance</div><h2>What is verified now</h2><ul class="proof-list">{''.join(f'<li>{_icon("check")} <span>{html.escape(_friendly(section))} <strong>{html.escape(_friendly(str((detail or {}).get("state") or "not_available")))}</strong></span></li>' for section, detail in list(sections.items())[:5])}</ul></aside></div><div class="metric-grid">{_metric_html(claims, "accounts.0.revenue", "Revenue")}{_metric_html(claims, "accounts.0.operating_result", "Operating result")}{_metric_html(claims, "accounts.0.assets", "Assets")}{_metric_html(claims, "accounts.0.equity", "Equity")}</div><div class="two-col"><div><section class="surface pad"><div class="section-heading"><div><span class="kicker">Summary</span><h2>Read the record</h2></div><span class="freshness">{_icon("calendar")} Account period: {html.escape(period_text)}</span></div><div>{''.join(sentence_html) or '<p class="muted">No source-linked synthesis is available.</p>'}</div></section><section id="facts"><div class="section-heading"><div><span class="kicker">Evidence</span><h2>Source-linked facts</h2></div><span class="freshness">{_icon("shield")} Each value has a trace</span></div><div class="surface pad claim-list">{claim_html or '<p class="empty">No supported facts were published.</p>'}</div></section></div><aside><section class="surface pad"><div class="section-heading"><div><span class="kicker">Coverage</span><h2>Availability</h2></div></div><div class="availability">{''.join(availability) or '<p class="muted">No section states recorded.</p>'}</div></section><section class="surface pad" style="margin-top:24px"><div class="section-heading"><div><span class="kicker">Open questions</span><h2>Unknowns</h2></div></div><ul class="unknown-list">{unknown_html}</ul></section></aside></div><section id="research" class="surface dark pad research"><div class="section-heading"><div><span class="kicker">Bounded research</span><h2>Ask about this company</h2><p class="muted" style="color:var(--paper-3)">Answers are limited to retained profile evidence. No unsupported fact is filled in.</p></div></div><form id="research-form" class="research-form" data-org="{html.escape(org, quote=True)}"><textarea name="question" rows="1" placeholder="Ask about accounts, roles, locations, or the website" aria-label="Research question"></textarea><button class="button gold" type="submit">{_icon("arrow-right")} Ask</button></form><div id="research-output" class="research-output" aria-live="polite"><p class="research-status">Ready for a source-linked question.</p></div></section></div>'''
+    glance = "".join(f'<li>{_icon("check")} <span>{html.escape(_friendly(section))} <strong>{html.escape(_friendly(str((detail or {}).get("state") or "not_available")))}</strong><small class="proof-note">{html.escape(_section_note(row, section, str((detail or {}).get("state") or "not_available")))}</small></span></li>' for section, detail in list(sections.items())[:5])
+    return f'''<div class="page"><p><a class="button secondary small" href="index.html">{_icon("arrow-right")} All companies</a></p><div class="hero"><section class="surface hero-main"><div class="kicker">Company record</div><div class="hero-meta">{_badge(str(row.get("status") or "not_available"))}<span class="meta-chip">{_icon("shield")} Evidence-first</span></div><h1>{html.escape(name)}</h1><p class="lead">Organisation number <strong>{html.escape(org)}</strong>{f' · {html.escape(_display_text(municipality))}' if municipality else ''}</p><div class="hero-actions"><a class="button" href="#research">{_icon("spark")} Ask this profile</a><a class="button secondary" href="#facts">{_icon("file")} Browse evidence</a></div></section><aside class="hero-side"><div class="kicker">At a glance</div><h2>What is verified now</h2><ul class="proof-list">{glance}</ul></aside></div><div class="metric-grid">{_metric_html(claims, "accounts.0.revenue", "Revenue")}{_metric_html(claims, "accounts.0.operating_result", "Operating result")}{_metric_html(claims, "accounts.0.assets", "Assets")}{_metric_html(claims, "accounts.0.equity", "Equity")}</div><div class="two-col"><div><section class="surface pad"><div class="section-heading"><div><span class="kicker">Summary</span><h2>Read the record</h2></div><span class="freshness">{_icon("calendar")} Account period: {html.escape(period_text)}</span></div><div>{''.join(sentence_html) or '<p class="muted">No source-linked synthesis is available.</p>'}</div></section><section id="facts"><div class="section-heading"><div><span class="kicker">Evidence</span><h2>Source-linked facts</h2></div><span class="freshness">{_icon("shield")} Each value has a trace</span></div><div class="surface pad claim-list">{claim_html or '<p class="empty">No supported facts were published.</p>'}</div></section></div><aside><section class="surface pad"><div class="section-heading"><div><span class="kicker">Coverage</span><h2>Availability</h2></div></div><div class="availability">{''.join(availability) or '<p class="muted">No section states recorded.</p>'}</div></section><section class="surface pad" style="margin-top:24px"><div class="section-heading"><div><span class="kicker">Open questions</span><h2>Unknowns</h2></div></div><ul class="unknown-list">{unknown_html}</ul></section></aside></div><section id="research" class="surface dark pad research"><div class="section-heading"><div><span class="kicker">Bounded research</span><h2>Ask about this company</h2><p class="muted" style="color:var(--paper-3)">Answers are limited to retained profile evidence. No unsupported fact is filled in.</p></div></div><form id="research-form" class="research-form" data-org="{html.escape(org, quote=True)}"><textarea name="question" rows="1" placeholder="Ask about accounts, roles, locations, or the website" aria-label="Research question"></textarea><button class="button gold" type="submit">{_icon("arrow-right")} Ask</button></form><div id="research-output" class="research-output" aria-live="polite"><p class="research-status">Ready for a source-linked question.</p></div></section></div>'''
 
 
 def _layout(title: str, body: str, *, active: str = "", data: Any | None = None, script: str = "") -> str:
