@@ -19,7 +19,7 @@ from norway_company_agent.discovery import build_company_search_query, choose_se
 from norway_company_agent.official import _reserve_history_slot, accounting_obligation_assessment, normalize_entity, normalize_financial_history, normalize_financials, normalize_roles  # noqa: E402
 from norway_company_agent.operations import domain_request_summary, latency_summary, percentile  # noqa: E402
 from norway_company_agent.sampling import deterministic_extension_sample, deterministic_financial_filer_sample, deterministic_website_audit_sample, financial_filer_eligible, normalize_row, stratum  # noqa: E402
-from norway_company_agent.research import answer_profile, parse_screen_query, screen_profiles  # noqa: E402
+from norway_company_agent.research import answer_profile, parse_question_intent, parse_screen_query, screen_profiles  # noqa: E402
 from norway_company_agent.workspace import load_workspace, record_screen, save_workspace  # noqa: E402
 from norway_company_agent.refresh import diff_datasets, diff_profile  # noqa: E402
 from norway_company_agent.sentiment import aggregate_company_sentiment, evaluate_predictions, publishable_sentiment_item, sentiment_input_eligibility  # noqa: E402
@@ -1122,6 +1122,28 @@ class OfficialNormalizationTests(unittest.TestCase):
 
 
 class ResearchAgentTests(unittest.TestCase):
+    def test_local_natural_language_routes_common_phrasings_without_a_model(self):
+        examples = {
+            "How much did the company make last year?": "financials",
+            "Who runs this company?": "roles",
+            "Where is it based?": "locations",
+            "Does it have an official website?": "website",
+            "How many people work there?": "employee",
+        }
+        for question, topic in examples.items():
+            with self.subTest(question=question):
+                intent = parse_question_intent(question)
+                self.assertEqual(intent["mode"], "topic")
+                self.assertIn(topic, intent["topics"])
+                self.assertTrue(intent["local_only"])
+
+    def test_local_natural_language_abstains_on_unsupported_questions(self):
+        intent = parse_question_intent("What is the company's market share?")
+        self.assertEqual(intent["mode"], "abstain")
+        result = answer_profile({"organisation_number": "923609016", "name": "Example AS", "evidence": {}}, "What is the company's market share?")
+        self.assertFalse(result["facts"])
+        self.assertTrue(any("no external request" in item for item in result["unsupported_or_uncertain"]))
+
     @staticmethod
     def screen_row(org, municipality, employees, revenue):
         return {

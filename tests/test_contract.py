@@ -205,6 +205,7 @@ def test_viewer_escapes_fetched_text_and_builds_compare_and_changes(tmp_path: Pa
     assert "—" not in profile
     assert "signalpost-data" not in profile
     assert "Ask about this company" in profile
+    assert "Local natural-language topic matching only" in profile
     assert "View evidence record" in profile
     assert "max-width: 1380px" in index
     assert "Explicit coverage" in index

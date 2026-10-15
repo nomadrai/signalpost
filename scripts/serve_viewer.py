@@ -81,6 +81,7 @@ def main() -> None:
     server = ThreadingHTTPServer((args.host, args.port), handler)
     print(f"Signalpost viewer: http://{args.host}:{args.port}/")
     print("Bounded research API: POST /api/research")
+    print("Research routing: local deterministic natural-language topics; no model, paid API, or live crawl")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -212,3 +212,11 @@ PYTHONPATH=src python scripts/serve_viewer.py \
 Open `http://127.0.0.1:8000/`. The endpoint accepts bounded `POST` requests at
 `/api/research` with an organisation number and a question. The default batch
 runner and submission contract remain unchanged.
+
+The question box supports bounded natural-language phrasing locally. For
+example, “How much did the company make?”, “Who runs this company?”, “Where is
+it based?”, and “Does it have a website?” are mapped to supported evidence
+families. This uses a deterministic local topic normalizer, not an LLM, paid
+API, or live crawl, so it adds no external cost. Questions outside identity,
+financials, roles, locations, websites, social profiles, and employees abstain
+with an explanation instead of guessing.

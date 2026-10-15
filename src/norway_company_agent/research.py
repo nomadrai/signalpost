@@ -16,17 +16,76 @@ def _claim(label: str, value: Any, record: dict[str, Any], classification: str) 
     }
 
 
+RESEARCH_TOPIC_PATTERNS = {
+    "identity": (
+        r"\b(?:who is|what is the company(?:\s|$)|company name|legal name|organisation number|organization number|org(?:anisation|anization)?\s*(?:no|number)|legal form|municipality|registered as)\b",
+        r"\b(?:hvem er|organisasjonsnummer|org(?:anisasjons)?nr|organisasjonsform|kommune)\b",
+    ),
+    "financials": (
+        r"\b(?:financial|finance|finances|account|accounts|revenue|turnover|income|profit|result|debt|asset|balance sheet|income statement|annual report|made|make|earned|generated|regnskap|omsetning|driftsresultat|årsresultat|eiendeler|gjeld)\b",
+        r"\bhow much did (?:the company|it)\s+(?:make|earn|generate|bring in)\b",
+    ),
+    "roles": (
+        r"\b(?:lead|leads|leader|leadership|role|roles|director|ceo|board|manager|manages|runs|who runs|who manages|styre|styret|daglig leder|leder|roller)\b",
+    ),
+    "locations": (
+        r"\b(?:location|locations|where|workplace|workplaces|office|offices|branch|branches|address|addresses|based|physical presence|registered subunit|registered units|adresse|arbeidssted|avdeling|sted)\b",
+    ),
+    "website": (
+        r"\b(?:website|web site|homepage|home page|online|company site|official site|nettside|hjemmeside)\b",
+    ),
+    "social": (
+        r"\b(?:social|social media|linkedin|facebook|instagram|youtube|tiktok|profile|profiles)\b",
+    ),
+    "employee": (
+        r"\b(?:employee|employees|staff|workforce|workers|headcount|people work|work there|ansatte|arbeidere)\b",
+    ),
+    "sentiment": (
+        r"\b(?:sentiment|reputation|reviews|review|rating|ratings|opinion|buzz|glassdoor|satisfaction)\b",
+    ),
+}
+GENERAL_QUESTION_PATTERNS = (
+    r"\b(?:what do we know|tell me about|give me an overview|summari[sz]e|overview|general information|all available information)\b",
+    r"\b(?:hva vet vi|fortell meg om|oversikt|oppsummer)\b",
+)
+SUPPORTED_RESEARCH_TOPICS = ("identity", "financials", "roles", "locations", "website", "social", "employee")
+
+
+def parse_question_intent(question: str) -> dict[str, Any]:
+    """Map flexible local phrasing to a closed evidence topic set.
+
+    This is intentionally a local regex/topic normalizer, not an LLM call. It
+    never creates a fact and abstains when the question is outside the supported
+    evidence families.
+    """
+    normalized = " ".join(str(question or "").casefold().split())
+    topics = sorted({
+        topic
+        for topic, patterns in RESEARCH_TOPIC_PATTERNS.items()
+        if any(re.search(pattern, normalized) for pattern in patterns)
+    })
+    if not topics and any(re.search(pattern, normalized) for pattern in GENERAL_QUESTION_PATTERNS):
+        return {"mode": "overview", "topics": list(SUPPORTED_RESEARCH_TOPICS), "normalized_question": normalized, "local_only": True}
+    if topics:
+        return {"mode": "topic", "topics": topics, "normalized_question": normalized, "local_only": True}
+    return {"mode": "abstain", "topics": [], "normalized_question": normalized, "local_only": True}
+
+
 def answer_profile(row: dict[str, Any], question: str) -> dict[str, Any]:
-    """Deterministic retrieval/answer layer; it never invents a missing field."""
-    q = question.casefold()
-    financial_terms = ("financial", "finance", "account", "revenue", "income", "profit", "result", "debt", "asset", "regnskap")
-    all_topics = not any(term in q for term in (*financial_terms, "lead", "role", "location", "where", "social", "sentiment", "employee"))
+    """Local bounded retrieval layer; it never invents a missing field or calls a model."""
+    intent = parse_question_intent(question)
+    q = intent["normalized_question"]
+    topics = set(intent["topics"])
+    all_topics = intent["mode"] == "overview"
     evidence = row.get("evidence", {})
     facts: list[dict[str, Any]] = []
     unsupported: list[str] = []
 
+    if intent["mode"] == "abstain":
+        unsupported.append("This local bounded answer supports identity, financials, roles, locations, websites, social profiles, and employees only; no external request was made.")
+
     registry = evidence.get("registry", {})
-    if all_topics or "employee" in q:
+    if all_topics or "identity" in topics or "employee" in topics:
         for label, value in (
             ("Registered name", row.get("name")),
             ("Organisation number", row.get("organisation_number")),
@@ -38,7 +97,7 @@ def answer_profile(row: dict[str, Any], question: str) -> dict[str, Any]:
                 facts.append(_claim(label, value, registry, "official_registry_fact"))
 
     financial = evidence.get("financials", {})
-    if all_topics or any(term in q for term in financial_terms):
+    if all_topics or "financials" in topics:
         records = (financial.get("value") or {}).get("records") or []
         if records:
             latest = records[0]
@@ -56,7 +115,7 @@ def answer_profile(row: dict[str, Any], question: str) -> dict[str, Any]:
             unsupported.append("No normalized annual-account record was returned; missing values are not interpreted as zero.")
 
     roles = evidence.get("roles", {})
-    if all_topics or any(term in q for term in ("lead", "role")):
+    if all_topics or "roles" in topics:
         people = [item for item in (roles.get("value") or {}).get("roles", []) if not item.get("inactive")]
         for person in people[:12]:
             facts.append(_claim(person.get("role") or person.get("group") or "Registered role", person.get("name") or person.get("organisation_number"), roles, "official_role_record"))
@@ -64,7 +123,7 @@ def answer_profile(row: dict[str, Any], question: str) -> dict[str, Any]:
             unsupported.append("No active public role holder was returned.")
 
     locations = evidence.get("locations", {})
-    if all_topics or any(term in q for term in ("location", "where")):
+    if all_topics or "locations" in topics:
         items = (locations.get("value") or {}).get("locations", [])
         for item in items[:12]:
             facts.append(_claim("Registered subunit", {"name": item.get("name"), "address": item.get("address")}, locations, "official_subunit_record"))
@@ -72,19 +131,19 @@ def answer_profile(row: dict[str, Any], question: str) -> dict[str, Any]:
             unsupported.append("No registered subunit was returned; this does not prove the company has no physical presence.")
 
     website = evidence.get("website", {})
-    if all_topics or "social" in q:
+    if all_topics or "website" in topics or "social" in topics:
         value = website.get("value") or {}
         website_publishable = (value.get("identity_assessment") or {}).get("publishable", True)
         if value.get("description") and website_publishable:
             facts.append(_claim("Website description", value["description"], website, "company_reported_claim"))
-        for item in (value.get("social_links") or []) if website_publishable else []:
+        for item in (value.get("social_links") or []) if website_publishable and (all_topics or "social" in topics) else []:
             facts.append(_claim(f"Declared {item['platform']} profile", item["url"], website, "company_linked_social_profile"))
         if website.get("status") == "available" and not website_publishable:
             unsupported.append("A registry-linked website was fetched, but exact legal-entity identity was not established; its claims and social links are quarantined.")
         if website.get("status") != "available":
             unsupported.append("The registry-linked company website was not available to this run.")
 
-    if "sentiment" in q:
+    if "sentiment" in topics:
         unsupported.append("Sentiment is not scored: no labelled Norwegian news/social evaluation corpus has been run, and company-owned pages are structurally promotional.")
 
     return {
@@ -93,7 +152,8 @@ def answer_profile(row: dict[str, Any], question: str) -> dict[str, Any]:
         "question": question,
         "facts": facts,
         "unsupported_or_uncertain": unsupported,
-        "answer_policy": "Retrieval and deterministic filtering precede prose; only source-linked facts are returned.",
+        "intent": intent,
+        "answer_policy": "Local natural-language topic matching routes only to retained evidence; no model, paid API, or live crawl is used.",
     }
 
 

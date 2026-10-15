@@ -531,7 +531,11 @@ def build_viewer(source: str | Path, output: str | Path) -> dict[str, Any]:
     for row in ui_rows:
         org = str(row.get("organisation_number") or "unknown")
         row_snapshots = {str(snapshot.get("snapshot_id")): snapshot for snapshot in row.get("snapshots") or []}
-        (out / f"company-{re.sub(r'[^0-9A-Za-z_-]', '_', org)}.html").write_text(_layout(_safe_text((row.get("identity") or {}).get("name") or org), _profile_body(row, snapshots=row_snapshots), active="companies", script=_research_script()), encoding="utf-8")
+        profile_body = _profile_body(row, snapshots=row_snapshots).replace(
+            "Answers are limited to retained profile evidence. No unsupported fact is filled in.",
+            "Local natural-language topic matching only. No model, paid API, live crawl, or unsupported fact.",
+        )
+        (out / f"company-{re.sub(r'[^0-9A-Za-z_-]', '_', org)}.html").write_text(_layout(_safe_text((row.get("identity") or {}).get("name") or org), profile_body, active="companies", script=_research_script()), encoding="utf-8")
     compare_body, compare_script = _compare_page(ui_rows)
     (out / "compare.html").write_text(_layout("Compare company profiles", compare_body, active="compare", script=compare_script), encoding="utf-8")
     (out / "changes.html").write_text(_layout("Signalpost change history", _changes_body(ui_rows), active="changes"), encoding="utf-8")
