@@ -21,7 +21,7 @@ from norway_company_agent.budget import BudgetGovernor  # noqa: E402
 from norway_company_agent.evidence import evidence  # noqa: E402
 from norway_company_agent.sampling import iter_bulk  # noqa: E402
 from norway_company_agent.schema import build_contract_envelope, stable_claim_id  # noqa: E402
-from norway_company_agent.viewer import build_viewer  # noqa: E402
+from norway_company_agent.viewer import _company_overview_html, build_viewer  # noqa: E402
 from audit_batch_checkpoint import audit_checkpoint  # noqa: E402
 from run_batch import recover_checkpoint  # noqa: E402
 from run_batch_impl import CATEGORY_PROFILE_TARGETS, COVERAGE_PROFILE_CHOICES, DEFAULT_PRIORITY, priority_for_profile  # noqa: E402
@@ -207,12 +207,26 @@ def test_viewer_escapes_fetched_text_and_builds_compare_and_changes(tmp_path: Pa
     assert "Ask about this company" in profile
     assert "Local natural-language topic matching only" in profile
     assert "View evidence record" in profile
+    assert "Company overview" in profile
+    assert "What this company does" in profile
+    assert "No supported description of what this company does was verified" in profile
     claim_id = row["claims"][0]["claim_id"]
     assert f'id="claim-{claim_id}"' in profile
     assert f'href="#claim-{claim_id}"' in profile
     assert "max-width: 1380px" in index
     assert "Explicit coverage" in index
     assert "workplaces-diagnostic" in index
+
+
+def test_company_overview_prefers_verified_description_and_links_its_claim():
+    overview = _company_overview_html([{
+        "claim_id": "clm-overview",
+        "field": "website.description",
+        "value": "Builds durable public infrastructure.",
+    }])
+    assert "Builds durable public infrastructure." in overview
+    assert "Based on a verified first-party company description." in overview
+    assert 'href="#claim-clm-overview"' in overview
 
 
 def test_validate_evidence_preserves_unicode_line_separators_in_jsonl(tmp_path: Path):

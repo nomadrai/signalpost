@@ -162,6 +162,11 @@ h3 { font-size: 1.26rem; line-height: 1.2; margin: 0 0 8px; }
 .two-col { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, .7fr); gap: 24px; align-items: start; }
 .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 34px 0 14px; }
 .section-heading h2 { margin: 0; }
+.company-overview { margin: 26px 0 30px; background: var(--paper-2); box-shadow: none; }
+.company-overview .section-heading { margin-top: 0; }
+.overview-copy { max-width: 72ch; margin: 0; font-size: 1.08rem; color: var(--ink-soft); }
+.overview-proof { margin-top: 14px; color: var(--muted); font-size: .82rem; }
+.overview-proof a { font-weight: 800; }
 .availability { display: grid; gap: 7px; }
 .availability-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) minmax(132px, auto); align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid var(--line); }
 .availability-row:first-child { border-top: 0; }
@@ -418,6 +423,42 @@ def _metric_html(claims: list[dict[str, Any]], field: str, label: str) -> str:
     return f'<div class="metric"><span class="field-label">{html.escape(label)}</span><strong class="metric-value">{html.escape(display)}</strong><span class="metric-note">Derived from latest account record</span></div>' if value is not None else f'<div class="metric"><span class="field-label">{html.escape(label)}</span><strong class="metric-value">Not available</strong><span class="metric-note">No supported value returned</span></div>'
 
 
+def _proof_links(claim_ids: list[str]) -> str:
+    return " ".join(
+        f'<a class="proof-link" href="#claim-{html.escape(str(claim_id), quote=True)}">{_icon("arrow-up-right")} proof</a>'
+        for claim_id in claim_ids
+    )
+
+
+def _company_overview_html(claims: list[dict[str, Any]]) -> str:
+    description = _claim_value(claims, "website.description")
+    industry = _claim_value(claims, "identity.industry_label")
+    claim_ids: list[str] = []
+    if description and description.get("value") not in (None, ""):
+        overview = f"The verified company website describes the business as: {_safe_text(description['value'])}."
+        source_note = "Based on a verified first-party company description."
+        claim_ids = [str(description["claim_id"])]
+    elif industry and industry.get("value") not in (None, ""):
+        overview = (
+            f"The registry classifies this company in the {_safe_text(industry['value'])} industry. "
+            "No more specific first-party description was verified in this snapshot."
+        )
+        source_note = "Registry-based overview; company description not verified."
+        claim_ids = [str(industry["claim_id"])]
+    else:
+        overview = "No supported description of what this company does was verified in the supplied sources."
+        source_note = "The overview is intentionally withheld rather than inferred."
+    proof = _proof_links(claim_ids)
+    proof_html = f'<p class="overview-proof">{html.escape(source_note)} {proof}</p>'
+    return (
+        '<section class="surface pad company-overview" aria-labelledby="company-overview-title">'
+        '<div class="section-heading"><div><span class="kicker">Company overview</span>'
+        '<h2 id="company-overview-title">What this company does</h2></div>'
+        '<span class="freshness">Source-backed</span></div>'
+        f'<p class="overview-copy">{html.escape(overview)}</p>{proof_html}</section>'
+    )
+
+
 def _profile_body(row: dict[str, Any], *, snapshots: dict[str, dict[str, Any]]) -> str:
     identity = row.get("identity") or {}
     org = str(row.get("organisation_number") or "")
@@ -428,7 +469,7 @@ def _profile_body(row: dict[str, Any], *, snapshots: dict[str, dict[str, Any]]) 
     sentences = synthesis.get("sentences") or []
     sentence_html = []
     for sentence in sentences:
-        proof_links = " ".join(f'<a class="proof-link" href="#claim-{html.escape(str(cid), quote=True)}">{_icon("arrow-up-right")} proof</a>' for cid in sentence.get("claim_ids") or [])
+        proof_links = _proof_links(sentence.get("claim_ids") or [])
         sentence_html.append(f'<p class="synthesis-sentence">{html.escape(_display_text(sentence.get("text")))}{proof_links}</p>')
     if not sentence_html and synthesis.get("text"):
         sentence_html.append(f'<p class="synthesis-sentence">{html.escape(_display_text(synthesis.get("text")))}</p>')
@@ -534,6 +575,10 @@ def build_viewer(source: str | Path, output: str | Path) -> dict[str, Any]:
         profile_body = _profile_body(row, snapshots=row_snapshots).replace(
             "Answers are limited to retained profile evidence. No unsupported fact is filled in.",
             "Local natural-language topic matching only. No model, paid API, live crawl, or unsupported fact.",
+        ).replace(
+            '<div class="metric-grid">',
+            _company_overview_html(row.get("claims") or []) + '<div class="metric-grid">',
+            1,
         )
         (out / f"company-{re.sub(r'[^0-9A-Za-z_-]', '_', org)}.html").write_text(_layout(_safe_text((row.get("identity") or {}).get("name") or org), profile_body, active="companies", script=_research_script()), encoding="utf-8")
     compare_body, compare_script = _compare_page(ui_rows)
