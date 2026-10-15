@@ -38,6 +38,23 @@ from norway_company_agent.llm import ModelConfig  # noqa: E402
 from norway_company_agent.discovery import website_candidates  # noqa: E402
 
 
+DEFAULT_PRIORITY = [
+    "registry_live", "planner", "website", "financials", "roles", "hiring", "activity",
+    "website_discovery", "model_signals", "locations", "group", "financial_history",
+]
+WORKPLACE_DIAGNOSTIC_PRIORITY = [
+    "registry_live", "locations", "planner", "website", "financials", "roles", "hiring", "activity",
+    "website_discovery", "model_signals", "group", "financial_history",
+]
+
+
+def priority_for_profile(profile: str) -> list[str]:
+    """Return an explicit field-family order without changing the default run."""
+    if profile == "workplace-diagnostic":
+        return list(WORKPLACE_DIAGNOSTIC_PRIORITY)
+    return list(DEFAULT_PRIORITY)
+
+
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     """Atomically replace a JSONL checkpoint."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -169,6 +186,8 @@ def main() -> None:
     parser.add_argument("--discover-websites", action="store_true", help="Try conservative legal-name domain candidates after the registry website")
     parser.add_argument("--model-assist", action="store_true", help="Use an optional OpenAI-compatible model only on retained exact-company page captures")
     parser.add_argument("--planner-assist", action="store_true", help="Use an optional bounded model planner for website candidate selection")
+    parser.add_argument("--coverage-profile", choices=("default", "workplace-diagnostic"), default="default",
+                        help="Keep default scoring order or opt into a workplace-first diagnostic allocation")
     args = parser.parse_args()
 
     started_at = utc_now()
@@ -334,7 +353,8 @@ def main() -> None:
     pass2_errors = 0
     completed_tasks = 0
     skipped_tasks = 0
-    priority = ["registry_live", "planner", "website", "financials", "roles", "hiring", "activity", "website_discovery", "model_signals", "locations", "group", "financial_history"]
+    coverage_profile = args.coverage_profile
+    priority = priority_for_profile(coverage_profile)
     module_operations = {
         module: {"planned_tasks": 0, "started_tasks": 0, "completed_tasks": 0,
                  "failed_tasks": 0, "skipped_tasks": 0, "skip_reasons": Counter(),
@@ -566,6 +586,7 @@ def main() -> None:
         "pass2_tasks_skipped": skipped_tasks,
         "pass2_errors": pass2_errors,
         "modules": requested_modules,
+        "coverage_profile": coverage_profile,
         "registry": {
             "registry_snapshot_sha256": snapshot_sha256,
             "registry_rows_scanned": scanned,

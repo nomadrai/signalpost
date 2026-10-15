@@ -24,9 +24,18 @@ from norway_company_agent.schema import build_contract_envelope, stable_claim_id
 from norway_company_agent.viewer import build_viewer  # noqa: E402
 from audit_batch_checkpoint import audit_checkpoint  # noqa: E402
 from run_batch import recover_checkpoint  # noqa: E402
+from run_batch_impl import DEFAULT_PRIORITY, priority_for_profile  # noqa: E402
 
 
 VALID_ORG = "993578843"
+
+
+def test_workplace_diagnostic_profile_is_opt_in_and_default_order_is_unchanged():
+    assert priority_for_profile("default") == DEFAULT_PRIORITY
+    assert DEFAULT_PRIORITY.index("website") < DEFAULT_PRIORITY.index("locations")
+    diagnostic = priority_for_profile("workplace-diagnostic")
+    assert diagnostic.index("locations") < diagnostic.index("website")
+    assert diagnostic.index("locations") < diagnostic.index("website_discovery")
 
 
 def _profile() -> dict:
@@ -153,6 +162,7 @@ def test_batch_report_attributes_zero_request_local_signal_work(tmp_path: Path):
     result = subprocess.run(command, capture_output=True, text=True, check=True)
     assert json.loads(result.stdout)["validation"]["passed"] is True
     report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["coverage_profile"] == "default"
     assert report["module_operations"]["hiring"]["local_tasks"] == 1
     assert report["module_operations"]["activity"]["local_tasks"] == 1
     assert report["module_operations"]["hiring"]["requests"] == 0

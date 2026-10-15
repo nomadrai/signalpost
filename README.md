@@ -141,6 +141,7 @@ The supported terminal states are `available`, `not_available`, `blocked`, `not_
 - Normalized universe JSONL is attributed to its published universe source, its exact supplied byte hash, and its local file identifier. It supports identity and the latest-filing-year flag; it supplies no financial amounts, roles, or subunit responses. Local reads have no fabricated HTTP status.
 - Monetary reservations share one **USD 10 maximum** across search and models. `MAX_COST_USD` defaults to zero, and search/model call limits default to zero. `SIGNALPOST_DAILY_COST_CAP_USD` defaults to 10 and `SIGNALPOST_DAILY_COST_LEDGER` defaults to `~/.cache/signalpost/daily-cost.json`, enforcing an additional persistent UTC-day cap across invocations using that same path. An optional local per-key request cap is available. A monetary allowance alone enables no provider.
 - `--resume` reuses completed modules only when the identity snapshot hash matches, and carries forward the same run's request/cost reservations and elapsed time. If the previous run report is absent, live requests are refused because in-flight usage cannot be reconstructed reliably. Keep the same run ID and report path for a resumed run.
+- `--coverage-profile default` preserves the submission allocation order. The opt-in `--coverage-profile workplace-diagnostic` moves registered workplaces ahead of websites and discovery for measurement; it uses the same shared request/deadline controls and is not part of the default submission command.
 
 To exercise matching large batches without live requests:
 
@@ -150,7 +151,7 @@ python scripts/check_batch_limits.py \
   --output-dir <runs>/budget-conformance
 ```
 
-See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, `reports/discovery-allocation-100.md` and `reports/discovery-recall-follow-up-100.md` for opt-in website-discovery measurements, `reports/final-candidate-smoke-21b5452.md` for the current clean-clone smoke, and `docs/submission.md` for the candidate command and declarations.
+See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, `reports/discovery-allocation-100.md` and `reports/discovery-recall-follow-up-100.md` for opt-in website-discovery measurements, `reports/coverage-profile-workplace-100.md` for the default versus workplace diagnostic comparison, `reports/final-candidate-smoke-21b5452.md` for the current clean-clone smoke, and `docs/submission.md` for the candidate command and declarations.
 
 The optional model transport and deterministic evidence gate were exercised with
 a local provider fixture in `reports/model-assist-integration-100.md`. No real
