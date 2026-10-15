@@ -176,6 +176,11 @@ def test_viewer_escapes_fetched_text_and_builds_compare_and_changes(tmp_path: Pa
     assert (out / "compare.html").exists()
     assert (out / "changes.html").exists()
     assert "src=\"http" not in index
+    assert "—" not in index
+    assert "—" not in profile
+    assert "signalpost-data" not in profile
+    assert "Ask about this company" in profile
+    assert "View evidence record" in profile
 
 
 def test_validate_evidence_preserves_unicode_line_separators_in_jsonl(tmp_path: Path):

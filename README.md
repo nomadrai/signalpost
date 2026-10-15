@@ -185,4 +185,20 @@ Build the dependency-light static viewer without a server or external assets:
 PYTHONPATH=src python scripts/build_viewer.py <run>/envelopes.jsonl <run>/viewer
 ```
 
-The viewer includes searchable company cards, profile facts with source links and dates, explicit unknown states, a three-column compare page, and change history. See `AGENT.md`, `CRAWLERS.md`, `IDENTITY_RESOLUTION.md`, `REFRESH.md`, `EVAL.md`, and `LIMITATIONS.md` for the operating boundaries.
+The viewer includes searchable company cards, profile facts with source links and dates, explicit unknown states, a field-aligned three-column compare page, change history, per-section freshness, and a bounded evidence question panel. Its visual system uses warm paper, forest green, and marigold accents with consistent outline symbols.
+
+To enable the profile question panel, serve the generated viewer through the
+small local research endpoint. It answers only from the retained profile
+evidence and does not start an unbounded crawl:
+
+```bash
+PYTHONPATH=src python scripts/serve_viewer.py \
+  --source <run>/envelopes.jsonl \
+  --output <run>/viewer \
+  --host 127.0.0.1 \
+  --port 8000
+```
+
+Open `http://127.0.0.1:8000/`. The endpoint accepts bounded `POST` requests at
+`/api/research` with an organisation number and a question. The default batch
+runner and submission contract remain unchanged.
