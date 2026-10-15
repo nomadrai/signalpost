@@ -9,7 +9,7 @@ score.
 ## Current candidate
 
 - Repository: `https://github.com/nomadrai/signalpost`
-- Runtime candidate revision verified locally: `afa5cc3a7a3b63dc814c60a53ca7e303a85839b8`
+- Runtime candidate revision verified locally: `7958634c7fcf5672bb9fe96ce9a8b395588c92db`
 - Runtime: Python 3.12+
 - Dependency installer: `uv`
 - Default models: none
@@ -76,6 +76,8 @@ terminal envelopes in 78.312 seconds, used 200/200 reserved HTTP attempts,
 declared USD 0, passed structural validation, and reconciled all requests to
 field families with zero unattributed attempts. See
 `reports/final-candidate-smoke-afa5cc3.md`.
+The following `7958634` commit only records this report and updates the
+candidate metadata; runtime source behavior is unchanged.
 
 ## Tests and network-free checks
 
