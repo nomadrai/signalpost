@@ -11,8 +11,21 @@ reports/generated/
 venv/
 __pycache__/
 .pytest_cache/
+.mypy_cache/
+.pytype/
+.ruff_cache/
 *.py[cod]
 *.egg-info/
+
+# Build and test output
+build/
+dist/
+htmlcov/
+.coverage
+.coverage.*
+.tox/
+.nox/
+.cache/
 
 # Local agent/tool and operating-system artifacts
 .impeccable/
