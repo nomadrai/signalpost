@@ -4,7 +4,7 @@
 
 - Python 3.12+
 - `beautifulsoup4`, `extruct`, `lxml`, `pydantic`, `pypdf`, `tldextract`, and `trafilatura` as declared in `pyproject.toml` and locked in `uv.lock`.
-- Release installation: `uv sync --locked --python 3.12`; run commands use `uv run --no-sync`. Runtime behavior was verified at `7c51966`; the latest pushed source baseline is `dcdd288`.
+- Release installation: `uv sync --locked --python 3.12`; run commands use `uv run --no-sync`. Runtime behavior and the final smoke were verified at `aded677`; submit the later packaging commit if one is added.
 - Scrapy and scrapy-playwright are optional crawl extras. Browser binaries are not required for the deterministic batch path.
 
 ## Sources

@@ -93,7 +93,7 @@ is ignored by Git.
 uv run --no-sync --with pytest pytest -q
 ```
 
-The verified release candidate passes 186 tests plus 10 subtests.
+The verified release candidate passes 187 tests plus 10 subtests.
 
 ### 5. Download the public local input data
 
@@ -137,7 +137,7 @@ uv run python scripts/run_competition_batch.py \
 Success means the report contains 100 emitted terminal envelopes, passed
 validation, and reconciled request attribution. The exact checked-in smoke
 measurement is documented in
-[`reports/final-candidate-smoke-7c51966.md`](reports/final-candidate-smoke-7c51966.md).
+[`reports/final-candidate-smoke-aded677.md`](reports/final-candidate-smoke-aded677.md).
 
 ### 7. Run a larger local batch only if needed
 
@@ -254,7 +254,7 @@ python scripts/check_batch_limits.py \
   --output-dir <runs>/budget-conformance
 ```
 
-See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, `reports/discovery-allocation-100.md` and `reports/discovery-recall-follow-up-100.md` for opt-in website-discovery measurements, `reports/coverage-profile-workplace-100.md` and `reports/coverage-priority-follow-up-100.md` for coverage-priority comparisons, `reports/final-candidate-smoke-7c51966.md` for the current clean-clone smoke, and `docs/submission.md` for the candidate command and declarations.
+See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, `reports/discovery-allocation-100.md` and `reports/discovery-recall-follow-up-100.md` for opt-in website-discovery measurements, `reports/coverage-profile-workplace-100.md` and `reports/coverage-priority-follow-up-100.md` for coverage-priority comparisons, `reports/final-candidate-smoke-aded677.md` for the exact final-commit smoke, and `docs/submission.md` for the candidate command and declarations.
 
 The optional model transport and deterministic evidence gate were exercised with
 a local provider fixture in `reports/model-assist-integration-100.md`. No real

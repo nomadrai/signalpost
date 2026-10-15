@@ -9,17 +9,17 @@ score.
 ## Current candidate
 
 - Repository: `https://github.com/nomadrai/signalpost`
-- Runtime behavior revision verified locally: `7c51966`
-- Latest pushed source baseline: `dcdd288`
+- Runtime behavior and final smoke revision: `aded677`
+- Submission package commit: record the final pushed commit in the submission email
 - Runtime: Python 3.12+
 - Dependency installer: `uv`
 - Default models: none
 - Default paid APIs: none
 - Default declared third-party cost: USD 0
 
-The commits after `7c51966` contain release metadata and ignore-rule updates;
-they do not change the batch behavior measured by the smoke report. The exact
-final commit sent to Builderr should be recorded in the submission email.
+The runtime smoke was run at `aded677`. If the documentation or report receives
+a later packaging commit, submit that later commit so the repository link,
+documentation, and runtime code are all covered by the same exact revision.
 
 ## Clean installation
 
@@ -65,21 +65,21 @@ repository. The clean-clone command used for the checked runtime was:
 uv run --no-sync python scripts/run_competition_batch.py \
   --organisations ROOT/runs/phase0/baseline-organisations.jsonl \
   --bulk ROOT/signalpost-company-universe-2025.jsonl/financial-filer-master-2025.jsonl \
-  --profiles-output ROOT/runs/final-smoke-7c51966/profiles.jsonl \
-  --output ROOT/runs/final-smoke-7c51966/envelopes.jsonl \
-  --report ROOT/runs/final-smoke-7c51966/report.json \
-  --run-id final-smoke-7c51966 \
+  --profiles-output ROOT/runs/final-smoke-aded677/profiles.jsonl \
+  --output ROOT/runs/final-smoke-aded677/envelopes.jsonl \
+  --report ROOT/runs/final-smoke-aded677/report.json \
+  --run-id final-smoke-aded677 \
   --expected-count 100 \
   --workers 8 \
   --deadline-seconds 180 \
   --max-requests 200
 ```
 
-The clean-source-clone measurement at `7c51966` produced 100/100
-terminal envelopes in 34.657 seconds, used 200/200 reserved HTTP attempts,
+The exact final-commit measurement at `aded677` produced 100/100 terminal
+envelopes in 65.898 seconds, used 200/200 reserved HTTP attempts,
 declared USD 0, passed structural validation, and reconciled all requests to
 field families with zero unattributed attempts. See
-`reports/final-candidate-smoke-7c51966.md`.
+`reports/final-candidate-smoke-aded677.md`.
 
 ## Tests and network-free checks
 
@@ -90,7 +90,7 @@ uv run --no-sync python scripts/check_batch_limits.py \
   --output-dir <runs>/budget-conformance
 ```
 
-The current tree passes 186 tests plus 10 subtests. The large zero-request checks
+The current tree passes 187 tests plus 10 subtests. The large zero-request checks
 produce 1,000 and 1,100 available terminal envelopes with exact identity/source
 attribution. A submitted run should also retain its JSON report, evidence output
 and request ledger for audit.
