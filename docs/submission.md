@@ -9,21 +9,26 @@ score.
 ## Current candidate
 
 - Repository: `https://github.com/nomadrai/signalpost`
-- Runtime source candidate revision verified locally: `7c51966`
+- Runtime behavior revision verified locally: `7c51966`
+- Latest pushed source baseline: `dcdd288`
 - Runtime: Python 3.12+
 - Dependency installer: `uv`
 - Default models: none
 - Default paid APIs: none
 - Default declared third-party cost: USD 0
 
+The commits after `7c51966` contain release metadata and ignore-rule updates;
+they do not change the batch behavior measured by the smoke report. The exact
+final commit sent to Builderr should be recorded in the submission email.
+
 ## Clean installation
 
-From a fresh clone at the exact candidate revision:
+From a fresh clone at the exact commit sent to Builderr:
 
 ```bash
 git clone https://github.com/nomadrai/signalpost.git
 cd signalpost
-git checkout 7c51966
+git checkout <exact-commit-sent-to-builderr>
 uv sync --locked --python 3.12
 ```
 
@@ -54,8 +59,7 @@ best-effort enrichment from preventing terminal output.
 ## Local smoke command used for this candidate
 
 The reproducible smoke input and verified public universe are outside the
-repository in the handoff workspace. The clean-clone command used for the
-current candidate was:
+repository. The clean-clone command used for the checked runtime was:
 
 ```bash
 uv run --no-sync python scripts/run_competition_batch.py \
@@ -71,7 +75,7 @@ uv run --no-sync python scripts/run_competition_batch.py \
   --max-requests 200
 ```
 
-The current clean-source-clone measurement at `7c51966` produced 100/100
+The clean-source-clone measurement at `7c51966` produced 100/100
 terminal envelopes in 34.657 seconds, used 200/200 reserved HTTP attempts,
 declared USD 0, passed structural validation, and reconciled all requests to
 field families with zero unattributed attempts. See

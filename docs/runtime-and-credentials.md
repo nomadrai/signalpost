@@ -240,4 +240,5 @@ git check-ignore -v .env.local
 
 The release install uses `uv sync --locked --python 3.12`; `uv run --no-sync`
 then executes the already-installed locked environment without rewriting the
-lockfile. Runtime candidate `7c51966` passed this procedure.
+lockfile. Runtime behavior was verified at `7c51966`; the latest pushed source
+baseline is `dcdd288`.

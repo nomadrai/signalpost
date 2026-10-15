@@ -1,85 +1,188 @@
 # Signalpost reference agent
 
-This is a runnable starting point for the Signalpost company-research challenge. It is intentionally a solid baseline, not a winning submission.
+Signalpost is a deterministic, evidence-first company-research agent for
+Norwegian organisations. It takes organisation numbers and produces one
+source-linked JSONL result per input company. The registry organisation number
+is always the identity anchor; uncertain facts are withheld instead of guessed.
 
-The public universe contains 411,160 eligible companies. Run the starter on 100 companies before submitting. Larger local tests, including 1,000 or more companies, are encouraged but their precomputed profiles are not submitted or scored.
+The repository is a runnable reference implementation for the Signalpost
+challenge. The default batch uses no hosted model, no paid search provider, and
+declares USD 0 third-party cost. Builderr supplies the official batch and frozen
+registry snapshot at evaluation time; you do not need the official batch to run
+the project locally or prepare a submission.
 
-## What it already does
+## What the agent does
 
 - reads a batch of Norwegian organisation numbers;
-- anchors identity in the Brønnøysund bulk registry;
-- fetches official financials, roles, group links and registered workplaces;
-- visits the registry-listed website and rejects weak entity matches;
-- emits one terminal JSONL envelope per input;
-- records sources, retrieval times, content hashes, request counts and latency;
-- supports checkpoint/resume and a deterministic refresh replay;
-- includes examples for external-footprint discovery and an evidence-bounded research agent.
+- anchors identity in the Brønnøysund registry or supplied company universe;
+- fetches official accounts, roles, group links, and registered workplaces;
+- visits registry-listed websites and publishes only exact-company matches;
+- extracts first-party website descriptions, profiles, hiring, and dated activity;
+- emits exactly one terminal JSONL envelope per input;
+- records sources, retrieval times, content hashes, extraction methods, request
+  counts, latency, availability states, and unknowns;
+- supports bounded deadlines, shared request budgets, checkpoint/resume, and
+  deterministic refresh replay;
+- includes a static evidence viewer and a bounded local research endpoint.
 
-## First run: try one saved example
+## Run it locally from a fresh clone
 
-Requires Python 3.12+. Open a terminal inside this extracted folder.
+The commands below assume Linux or macOS and a shell such as Bash. The same
+Python commands work on Windows PowerShell after installing Git, Python 3.12,
+and `uv`.
 
-Before downloading company data or running a full crawl, try the bundled public
-sample. It uses saved responses: no API key, registry download or live web requests.
+### 1. Clone the repository
 
 ```bash
-python3 scripts/run_refresh_replay.py \
+git clone https://github.com/nomadrai/signalpost.git
+cd signalpost
+```
+
+For a submission or reproducibility check, use the exact commit listed in the
+submission email instead of `main` before installing dependencies. For ordinary
+local development, keep the default branch:
+
+```bash
+git checkout main
+# Reproducible submission alternative:
+# git checkout <exact-commit-sent-to-builderr>
+```
+
+### 2. Install `uv` if needed, then create the locked environment
+
+Check whether it is already installed:
+
+```bash
+uv --version
+```
+
+If the command is missing, install `uv` using the official installer, then open
+a new terminal if your shell does not immediately see it:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Install the exact locked Python environment:
+
+```bash
+uv sync --locked --python 3.12
+```
+
+The project creates `.venv/` locally. It is ignored by Git and does not need to
+be committed.
+
+### 3. Run the no-network example first
+
+This verifies refresh/change detection using only the checked-in fixture. It
+does not download the registry, require credentials, or make live requests.
+
+```bash
+uv run python scripts/run_refresh_replay.py \
   --manifest tests/fixtures/refresh-snapshots.json \
   --output out/refresh-demo.json
 ```
 
-Open `out/refresh-demo.json`. The `events` list shows what changed between two
-versions of one company profile and the source evidence for each change. The sample
-should find two expected changes, no false changes, and no extra changes when the
-same data is checked again.
+Inspect `out/refresh-demo.json`. Its `events` list shows source-backed changes
+between two saved versions of one company profile. The generated `out/` folder
+is ignored by Git.
 
-The report's `qualification_passed` field refers only to this public sample check.
-It does not qualify an entry for the competition or prove live information coverage.
-The printed request counts are reads from saved responses, not network calls.
-
-## Next: research live companies
-
-Requires Python 3.12+ and `uv`. This step downloads data and makes live requests.
-The manifest selector can create a local test batch of any size. Use 100 rows for the recommended smoke test before trying a larger batch.
+### 4. Run the test suite
 
 ```bash
-uv sync --locked --python 3.12
-curl -L 'https://data.brreg.no/enhetsregisteret/api/enheter/lastned/csv' -o brreg-enheter.csv
-curl -L 'https://builderr.ai/signalpost-company-universe-2025.jsonl.gz' -o signalpost-universe.jsonl.gz
+uv run --no-sync --with pytest pytest -q
+```
 
+The verified release candidate passes 186 tests plus 10 subtests.
+
+### 5. Download the public local input data
+
+This step makes live HTTP requests and downloads public data. Create a local
+`data/` directory, which is ignored for downloaded CSV/JSONL data:
+
+```bash
+mkdir -p data
+curl -fL 'https://data.brreg.no/enhetsregisteret/api/enheter/lastned/csv' \
+  -o data/brreg-enheter.csv
+curl -fL 'https://builderr.ai/signalpost-company-universe-2025.jsonl.gz' \
+  -o data/signalpost-universe.jsonl.gz
+```
+
+Select a deterministic 100-company practice batch:
+
+```bash
 uv run python select_entry_batch.py \
-  --universe signalpost-universe.jsonl.gz \
+  --universe data/signalpost-universe.jsonl.gz \
   --count 100 \
-  --output entry-companies.jsonl
+  --output data/entry-companies.jsonl
+```
 
-# Use the 100-company batch as your smoke test.
-cp entry-companies.jsonl smoke-companies.jsonl
+### 6. Run the 100-company local smoke test
 
+The smoke command writes profiles, envelopes, a machine-readable report, and a
+request ledger below `out/smoke-100/`. The folder is ignored by Git.
+
+```bash
+mkdir -p out/smoke-100
 uv run python scripts/run_competition_batch.py \
-  --organisations smoke-companies.jsonl \
-  --bulk brreg-enheter.csv \
-  --profiles-output out/smoke-profiles.jsonl \
-  --output out/smoke-envelopes.jsonl \
-  --report out/smoke-report.json \
-  --run-id smoke-001 \
+  --organisations data/entry-companies.jsonl \
+  --bulk data/brreg-enheter.csv \
+  --profiles-output out/smoke-100/profiles.jsonl \
+  --output out/smoke-100/envelopes.jsonl \
+  --report out/smoke-100/report.json \
+  --run-id smoke-100 \
   --expected-count 100
+```
 
-# You may test at larger scale locally, but Builderr supplies the official batch for scoring.
+Success means the report contains 100 emitted terminal envelopes, passed
+validation, and reconciled request attribution. The exact checked-in smoke
+measurement is documented in
+[`reports/final-candidate-smoke-7c51966.md`](reports/final-candidate-smoke-7c51966.md).
+
+### 7. Run a larger local batch only if needed
+
+Increase `--count` and `--expected-count` together. Builderr supplies the
+official evaluation companies, so local 1,000-company runs are diagnostics,
+not a substitute for the official evaluation batch:
+
+```bash
+uv run python select_entry_batch.py \
+  --universe data/signalpost-universe.jsonl.gz \
+  --count 1000 \
+  --output data/entry-companies-1000.jsonl
+
 uv run python scripts/run_competition_batch.py \
-  --organisations entry-companies.jsonl \
-  --bulk brreg-enheter.csv \
+  --organisations data/entry-companies-1000.jsonl \
+  --bulk data/brreg-enheter.csv \
   --profiles-output out/profiles.jsonl \
   --output out/envelopes.jsonl \
   --report out/run-report.json \
   --run-id local-001 \
   --expected-count 1000
-
-uv run --no-sync --with pytest pytest -q
 ```
 
-The current release candidate was verified on October 15, 2026 with 186 tests and 10 subtests, followed by a fresh Python 3.12 clean-clone install and the exact competition-compatible 100-company smoke command. Runtime source candidate `7c51966` emitted 100/100 terminal envelopes in 34.657 seconds, reserved 200/200 attempts, declared USD 0, and passed structural validation. The measured default-priority follow-up is recorded in `reports/coverage-priority-follow-up-100.md`; the clean-clone smoke is recorded in `reports/final-candidate-smoke-7c51966.md`.
+### 8. Build and view the static evidence UI
 
-Increase `--count` and `--expected-count` together for a larger local test. The 100-row smoke test above is practice only; Builderr supplies the companies for every official run.
+After a batch has produced `envelopes.jsonl`, build the dependency-light viewer:
+
+```bash
+uv run python scripts/build_viewer.py \
+  out/smoke-100/envelopes.jsonl \
+  out/smoke-100/viewer
+```
+
+To use the bounded local research panel, serve the same output:
+
+```bash
+uv run python scripts/serve_viewer.py \
+  --source out/smoke-100/envelopes.jsonl \
+  --output out/smoke-100/viewer \
+  --host 127.0.0.1 \
+  --port 8000
+```
+
+Open <http://127.0.0.1:8000/>. The panel answers only from retained profile
+evidence; it does not start an unbounded crawl or call an LLM.
 
 ## The improvement loop
 
