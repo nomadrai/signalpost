@@ -96,3 +96,31 @@ def test_derived_website_candidates_are_conservative_and_exclude_directories():
     assert {candidate["url"] for candidate in candidates} == {"https://example.no/", "https://example.com/"}
     assert all("proff.no" not in candidate["url"] for candidate in candidates)
     assert any(candidate["source"] == "legal_name_domain" for candidate in candidates)
+
+
+def test_derived_candidates_keep_both_registry_sources_and_bounded_domain_variants():
+    profile = {
+        "organisation_number": ORG,
+        "name": "Royal Subsea AS",
+        "legal_form": "AS",
+        "website": "https://stale.example/",
+        "evidence": {"registry_live": {"value": {"name": "Royal Subsea AS", "website": "https://current.example/"}}},
+    }
+    candidates = website_candidates(profile, derived=True)
+    urls = {candidate["url"] for candidate in candidates}
+    assert "https://stale.example/" in urls
+    assert "https://current.example/" in urls
+    assert "https://royalsubsea.no/" in urls
+    assert "https://royal-subsea.no/" in urls
+    assert "https://rs.no/" in urls
+    assert "https://royalsubsea.com/" in urls
+    assert len(candidates) <= 8
+
+
+def test_registry_live_website_is_a_deterministic_candidate_even_without_snapshot_url():
+    profile = {
+        "organisation_number": ORG,
+        "name": "Example AS",
+        "evidence": {"registry_live": {"value": {"website": "https://current.example/"}}},
+    }
+    assert website_candidates(profile, derived=False) == [{"url": "https://current.example/", "source": "registry_live"}]

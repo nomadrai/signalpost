@@ -889,6 +889,20 @@ class WebsiteTests(unittest.TestCase):
         soup = BeautifulSoup('<a href="/kontakt">Contact</a><a href="https://other.no/about">About</a><a href="/products">Products</a>', "html.parser")
         self.assertEqual(_priority_links("https://example.no/", soup), ["https://example.no/kontakt"])
 
+    def test_priority_pages_include_identity_variants_and_www_site_links(self):
+        soup = BeautifulSoup(
+            '<a href="https://www.example.no/om-bedriften">Om bedriften</a>'
+            '<a href="/kontakt-oss">Kontakt oss</a>'
+            '<a href="/legal">Legal</a>',
+            "html.parser",
+        )
+        links = _priority_links("https://example.no/", soup)
+        self.assertEqual(set(links[:3]), {
+            "https://www.example.no/om-bedriften",
+            "https://example.no/kontakt-oss",
+            "https://example.no/legal",
+        })
+
     def test_js_shell_is_only_a_fallback_candidate(self):
         shell = BeautifulSoup('<html><script src="a.js"></script><script src="b.js"></script></html>', "html.parser")
         self.assertEqual(_extraction_state("", shell), "js_fallback_candidate")
@@ -967,6 +981,35 @@ class DiscoveryTests(unittest.TestCase):
         self.assertFalse(decision["abstained"])
         self.assertEqual(decision["selected"]["status"], "accepted_for_crawl")
         self.assertIn("Publication still requires", decision["policy"])
+
+    def test_exact_name_and_org_in_result_can_reach_a_branded_domain_for_crawling(self):
+        profile = {"organisation_number": "923609016", "name": "Norsk Fiskeeksport AS", "municipality": "NOTODDEN"}
+        decision = choose_search_candidate(profile, [{
+            "url": "https://nfe-group.no/",
+            "title": "Norsk Fiskeeksport AS",
+            "snippet": "Official site, organisation number 923609016",
+            "rank": 1,
+            "provider": "fixture",
+        }])
+        self.assertFalse(decision["abstained"])
+        self.assertEqual(decision["selected"]["url"], "https://nfe-group.no/")
+        self.assertTrue(decision["selected"]["crawl_eligible"])
+        self.assertFalse(decision["selected"]["publishable_candidate"])
+
+    def test_search_candidate_frontier_keeps_three_urls_without_provider_metadata(self):
+        profile = {"organisation_number": "923609016", "name": "Norsk Fiskeeksport AS", "municipality": "NOTODDEN"}
+        results = [{
+            "url": f"https://nfe-{index}.no/",
+            "title": "Norsk Fiskeeksport AS",
+            "snippet": "Official site, organisation number 923609016",
+            "rank": index,
+            "provider": "fixture",
+            "query": "private query",
+        } for index in range(1, 5)]
+        decision = choose_search_candidate(profile, results)
+        self.assertEqual([item["url"] for item in decision["selected_candidates"]], [
+            "https://nfe-1.no/", "https://nfe-2.no/", "https://nfe-3.no/",
+        ])
 
     def test_ambiguous_name_match_without_host_support_abstains(self):
         profile = {"organisation_number": "923609016", "name": "Norsk Fiskeeksport AS", "municipality": "NOTODDEN"}
@@ -1265,6 +1308,39 @@ class WebsiteIdentityTests(unittest.TestCase):
         assessment = assess_website_identity(row)
         self.assertTrue(assessment["publishable"])
         self.assertIn("registered_street_and_postcode_or_city", assessment["proofs"])
+
+    def test_derived_domain_with_exact_name_and_registered_address_is_publishable(self):
+        row = {"organisation_number": "923609016", "name": "Norsk Fiskeeksport AS",
+               "business_address": {"adresse": ["Havnegata 12"], "postnummer": "6001", "poststed": "Ålesund"},
+               "evidence": {"website": {"status": "available", "value": {
+                   "candidate_source": "legal_name_domain",
+                   "title": "Norsk Fiskeeksport AS",
+                   "identity_text_excerpt": "Norsk Fiskeeksport AS Havnegata 12 6001 Ålesund",
+               }}}}
+        assessment = assess_website_identity(row)
+        self.assertTrue(assessment["publishable"])
+        self.assertIn("registered_street_and_postcode_or_city", assessment["proofs"])
+
+    def test_branded_search_domain_needs_host_or_registered_identity_corroboration(self):
+        base = {
+            "organisation_number": "923609016", "name": "Norsk Fiskeeksport AS",
+            "evidence": {"website": {"status": "available", "value": {
+                "candidate_source": "transient_firecrawl_search",
+                "title": "Norsk Fiskeeksport AS",
+                "identity_text_excerpt": "Norsk Fiskeeksport AS organisation number 923 609 016",
+            }}}
+        }
+        self.assertFalse(assess_website_identity(base)["publishable"])
+        corroborated = {
+            **base,
+            "business_address": {"adresse": ["Havnegata 12"], "postnummer": "6001", "poststed": "Ålesund"},
+            "evidence": {"website": {"status": "available", "value": {
+                "candidate_source": "transient_firecrawl_search",
+                "title": "Norsk Fiskeeksport AS",
+                "identity_text_excerpt": "Norsk Fiskeeksport AS organisation number 923 609 016 Havnegata 12 6001 Ålesund",
+            }}}
+        }
+        self.assertTrue(assess_website_identity(corroborated)["publishable"])
 
     def test_parent_brand_without_legal_name_is_quarantined(self):
         row = {"organisation_number": "988412406", "name": "Tevlingveien 23 Invest AS", "evidence": {"website": {"status": "available", "value": {"title": "Ragde Eiendom"}}}}

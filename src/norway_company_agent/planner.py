@@ -94,15 +94,19 @@ def plan_next_action(profile: dict[str, Any], client, *, derived_candidates: boo
             results, search_operation = search_company(profile, client.budget)
             decision = choose_search_candidate(profile, results)
             selected = decision.get("selected")
-            if selected:
+            selected_candidates = decision.get("selected_candidates") or ([selected] if selected else [])
+            if selected_candidates:
                 # Search titles, snippets, rank and query text are transient
-                # provider output. Keep only the URL needed by the deterministic
-                # crawler; publication still requires an independent fetch.
+                # provider output. Keep only a bounded URL frontier needed by
+                # the deterministic crawler; publication still requires an
+                # independent fetch.
+                candidate_urls = [item.get("url") for item in selected_candidates if item.get("url")]
                 action = {
                     "status": action["status"],
                     "action": action["action"],
                     "reason": action.get("reason", ""),
-                    "candidate_url": selected.get("url"),
+                    "candidate_url": candidate_urls[0],
+                    "candidate_urls": candidate_urls,
                     "candidate_source": "transient_firecrawl_search",
                 }
             else:

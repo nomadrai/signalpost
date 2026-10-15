@@ -40,16 +40,26 @@ def enrich_module(task: dict, shared: tuple) -> dict:
             attempted = {item["url"] for item in ((previous or {}).get("value") or {}).get("candidate_attempts", [])}
             metric = {"bytes": 0, "latencies_ms": []}
             planner_action = ((profile.get("evidence", {}).get("planner") or {}).get("value") or {}).get("action") or {}
+            planner_urls = planner_action.get("candidate_urls")
+            if not isinstance(planner_urls, list):
+                planner_urls = []
             planner_url = planner_action.get("candidate_url") or planner_action.get("url")
-            if planner_action.get("status") == "accepted" and planner_url:
-                selected = next((item for item in plan if item.get("url") == planner_url), None)
-                if selected is None and planner_action.get("source") == "legal_name_domain":
-                    selected = next((item for item in website_candidates(profile, derived=True)
-                                     if item["url"] == planner_url), None)
-                if selected is None and planner_action.get("candidate_source") == "transient_firecrawl_search":
-                    selected = {"url": planner_url, "source": "transient_firecrawl_search"}
-                if selected is not None:
-                    plan = [selected, *[item for item in plan if item.get("url") != planner_url]]
+            if planner_url and planner_url not in planner_urls:
+                planner_urls.insert(0, planner_url)
+            if planner_action.get("status") == "accepted" and planner_urls:
+                selected_candidates = []
+                for planner_url in planner_urls[:3]:
+                    selected = next((item for item in plan if item.get("url") == planner_url), None)
+                    if selected is None and planner_action.get("source") == "legal_name_domain":
+                        selected = next((item for item in website_candidates(profile, derived=True)
+                                         if item["url"] == planner_url), None)
+                    if selected is None and planner_action.get("candidate_source") == "transient_firecrawl_search":
+                        selected = {"url": planner_url, "source": "transient_firecrawl_search"}
+                    if selected is not None and selected["url"] not in {item["url"] for item in selected_candidates}:
+                        selected_candidates.append(selected)
+                if selected_candidates:
+                    selected_urls = {item["url"] for item in selected_candidates}
+                    plan = [*selected_candidates, *[item for item in plan if item.get("url") not in selected_urls]]
             best = previous
             attempts = []
             for candidate in plan:
@@ -61,7 +71,10 @@ def enrich_module(task: dict, shared: tuple) -> dict:
                 metric["latencies_ms"].extend(candidate_metric.get("latencies_ms", []))
                 assessment = (record.get("value") or {}).get("identity_assessment") or {}
                 attempts.append({**candidate, "status": record["status"], "assessment": assessment, "note": record.get("note")})
-                if best is None or record["status"] == "available":
+                best_assessment = ((best or {}).get("value") or {}).get("identity_assessment") or {}
+                if (best is None or
+                        (record["status"] == "available" and
+                         (best.get("status") != "available" or assessment.get("score", 0) > best_assessment.get("score", 0)))):
                     best = record
                 if assessment.get("publishable") or record["status"] == "not_fetched":
                     break

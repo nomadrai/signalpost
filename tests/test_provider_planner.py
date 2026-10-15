@@ -15,6 +15,7 @@ from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -242,13 +243,20 @@ def configure_runner_fixture(base, mode):
                         content_sha256=hashlib.sha256(text.encode()).hexdigest()), {"bytes": 100}
 
     enrichment.fetch_website = capture
+    if mode == "registry-live":
+        def official(_org, modules, **_kwargs):
+            return ({"registry_live": evidence(
+                "registry_live", "available", "fixture_registry", "https://registry.example/entity",
+                value={"organisation_number": "993578843", "website": "https://example.no/"},
+            )}, [SimpleNamespace(bytes_received=0, elapsed_ms=0)])
+        enrichment.fetch_official_modules = official
     if mode == "worker-error":
         def fail(*args, **kwargs):
             raise RuntimeError("fixture planner failed")
         enrichment.plan_next_action = fail
 
 
-@pytest.mark.parametrize("mode", ["search", "fetch", "wrong-owner", "worker-error"])
+@pytest.mark.parametrize("mode", ["search", "fetch", "wrong-owner", "worker-error", "registry-live"])
 def test_runner_executes_planner_candidates_and_preserves_identity_gate(tmp_path, provider_server, mode):
     base, counts = provider_server
     inputs = tmp_path / "input.jsonl"
@@ -275,8 +283,11 @@ def test_runner_executes_planner_candidates_and_preserves_identity_gate(tmp_path
                    "SIGNALPOST_DAILY_COST_CAP_USD": "1", "SIGNALPOST_DAILY_COST_LEDGER": str(tmp_path / "daily.json")}
     command = [sys.executable, str(driver), "--input", str(inputs), "--bulk", str(bulk),
                "--output", str(tmp_path / "envelopes.jsonl"), "--profiles-output", str(tmp_path / "profiles.jsonl"),
-               "--report", str(tmp_path / "report.json"), "--run-id", "planner-fixture", "--modules", "registry",
-               "--planner-assist", "--max-requests", "3", "--deadline-seconds", "15"]
+               "--report", str(tmp_path / "report.json"), "--run-id", "planner-fixture",
+               "--modules", "registry,registry_live,website" if mode == "registry-live" else "registry",
+               "--max-requests", "3" if mode != "registry-live" else "1", "--deadline-seconds", "15"]
+    if mode != "registry-live":
+        command.append("--planner-assist")
     if mode == "fetch":
         command.append("--discover-websites")
     subprocess.run(command, env=environment, check=True, capture_output=True, timeout=20)
@@ -290,11 +301,18 @@ def test_runner_executes_planner_candidates_and_preserves_identity_gate(tmp_path
         assert report["module_operations"]["planner"]["failed_tasks"] == 1
         assert counts == {}
         return
-    assert counts == ({"/chat/completions": 1} if mode == "fetch" else {"/chat/completions": 1, "/search": 1})
-    expected_requests = 2 if mode == "fetch" else 3
+    if mode == "registry-live":
+        assert counts == {}
+        expected_requests = 1
+    else:
+        assert counts == ({"/chat/completions": 1} if mode == "fetch" else {"/chat/completions": 1, "/search": 1})
+        expected_requests = 2 if mode == "fetch" else 3
     assert report["operations"]["requests"] == expected_requests
-    assert report["budget"]["daily"]["cost_usd"] == (0.02 if mode == "fetch" else 0.03)
-    for path in (tmp_path / "profiles.jsonl", tmp_path / "envelopes.jsonl", tmp_path / "report.json", tmp_path / "daily.json"):
+    assert report["budget"]["daily"]["cost_usd"] == (0 if mode == "registry-live" else 0.02 if mode == "fetch" else 0.03)
+    paths = [tmp_path / "profiles.jsonl", tmp_path / "envelopes.jsonl", tmp_path / "report.json"]
+    if mode != "registry-live":
+        paths.append(tmp_path / "daily.json")
+    for path in paths:
         text = path.read_text()
         assert "fixture-model-secret" not in text and "fixture-search-secret" not in text
         assert "transient-only-marker" not in text

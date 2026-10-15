@@ -289,4 +289,29 @@ def test_planner_search_result_is_deterministically_gated(monkeypatch):
     result = plan_next_action(profile, PlannerStub())
     action = result["planner"]["value"]["action"]
     assert action["candidate_url"] == "https://example.no/"
+    assert action["candidate_urls"] == ["https://example.no/"]
     assert "raw" not in result["planner"]["value"]["search"]
+
+
+def test_planner_retains_bounded_search_url_frontier_only(monkeypatch):
+    class PlannerStub:
+        config = ModelConfig(api_key="test", endpoint="https://model.example/v1/chat/completions", model="planner-model")
+        budget = object()
+
+        def complete_json(self, *, system: str, user: str):
+            return {"action": "search_company", "query": "Example AS 993578843 Oslo"}, {"status": "available", "model": "planner-model"}
+
+    monkeypatch.setattr(
+        "norway_company_agent.planner.search_company",
+        lambda profile, budget: ([
+            {"url": "https://brand.example/", "title": "Example AS", "snippet": "993578843", "rank": 1, "provider": "fixture", "query": "secret"},
+            {"url": "https://second.example/", "title": "Example AS", "snippet": "993578843", "rank": 2, "provider": "fixture", "query": "secret"},
+        ], {"status": "available", "candidate_count": 2}),
+    )
+    result = plan_next_action(
+        {"organisation_number": ORG, "name": "Example AS", "municipality": "Oslo"},
+        PlannerStub(),
+    )
+    action = result["planner"]["value"]["action"]
+    assert action["candidate_urls"] == ["https://brand.example/", "https://second.example/"]
+    assert "secret" not in json.dumps(result)

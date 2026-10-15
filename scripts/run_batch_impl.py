@@ -35,6 +35,7 @@ from norway_company_agent.official import official_endpoints  # noqa: E402
 from norway_company_agent.sampling import iter_bulk, snapshot_sha256 as hash_snapshot  # noqa: E402
 from norway_company_agent.workers import BoundedWorkers  # noqa: E402
 from norway_company_agent.llm import ModelConfig  # noqa: E402
+from norway_company_agent.discovery import website_candidates  # noqa: E402
 
 
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -407,7 +408,7 @@ def main() -> None:
                 planner_has_candidate = planner_action.get("status") == "accepted" and bool(
                     planner_action.get("candidate_url") or planner_action.get("url")
                 )
-                if task["module"] == "website" and not profiles[org].get("website") and not planner_has_candidate:
+                if task["module"] == "website" and not website_candidates(profiles[org], derived=False) and not planner_has_candidate:
                     profiles[org].setdefault("evidence", {})["website"] = evidence("website", "not_found", "registry_linked_company_website", "https://data.brreg.no/enhetsregisteret/api/enheter", note="No website candidate in the supplied identity snapshot")
                     completed_orgs.add(org)
                     completed_tasks += 1

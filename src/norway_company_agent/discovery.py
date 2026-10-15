@@ -11,6 +11,7 @@ from .identity import BLOCKED_WEBSITE_HOSTS, company_host_allowed
 
 BLOCKED_DISCOVERY_HOSTS = BLOCKED_WEBSITE_HOSTS
 GENERIC_NAME_TOKENS = {"as", "asa", "ans", "da", "enk", "sa", "nuf", "company", "norge", "norway", "gruppen", "group"}
+DERIVED_CANDIDATE_LIMIT = 8
 
 
 def website_candidates(profile: dict[str, Any], *, derived: bool = False) -> list[dict[str, str]]:
@@ -22,15 +23,23 @@ def website_candidates(profile: dict[str, Any], *, derived: bool = False) -> lis
         if normalized and company_host_allowed(normalized):
             candidates.append({"url": normalized, "source": source})
     if derived:
-        tokens = [token for token in _tokens(profile.get("name")) if token not in GENERIC_NAME_TOKENS]
+        names = [profile.get("name"), live.get("name")]
         unsuitable = {"holding", "invest", "investering", "eiendom", "borettslaget", "borettslag", "sameie", "enk"}
-        if (1 <= len(tokens) <= 3 and 4 <= len("".join(tokens)) <= 40 and
-            not set(tokens) & unsuitable and not any(token.isdigit() for token in tokens) and
-            profile.get("legal_form") != "ENK"):
+        for name in names:
+            tokens = [token for token in _tokens(name) if token not in GENERIC_NAME_TOKENS]
+            if not (1 <= len(tokens) <= 3 and 4 <= len("".join(tokens)) <= 40 and
+                    not set(tokens) & unsuitable and not any(token.isdigit() for token in tokens) and
+                    profile.get("legal_form") != "ENK"):
+                continue
+            labels = ["".join(tokens)]
+            if len(tokens) >= 2:
+                labels.append("-".join(tokens))
+                labels.append("".join(token[0] for token in tokens))
             for suffix in ("no", "com"):
-                candidates.append({"url": f"https://{''.join(tokens)}.{suffix}/", "source": "legal_name_domain"})
+                for label in labels:
+                    candidates.append({"url": f"https://{label}.{suffix}/", "source": "legal_name_domain"})
     unique = {item["url"]: item for item in reversed(candidates)}
-    return list(reversed(list(unique.values())))[:3]
+    return list(reversed(list(unique.values())))[:DERIVED_CANDIDATE_LIMIT]
 
 
 def build_company_search_query(profile: dict[str, Any]) -> str:
@@ -89,6 +98,8 @@ def score_search_candidate(profile: dict[str, Any], result: dict[str, Any]) -> d
     all_name_tokens_in_title = bool(name_tokens and set(name_tokens).issubset(set(title_tokens)))
     name_in_host = bool(name_compact and name_compact in host_compact)
     municipality_match = bool(municipality_tokens and municipality_tokens <= set(snippet_tokens))
+    review_markers = {"directory", "catalog", "portfolio", "group", "listing", "profile", "marketplace"}
+    review_marker_match = bool(review_markers & set(title_tokens + snippet_tokens))
     score = 0.0
     reasons = []
     if org_match:
@@ -108,13 +119,20 @@ def score_search_candidate(profile: dict[str, Any], result: dict[str, Any]) -> d
         reasons.append("registry municipality appears in result snippet")
     score = min(score, 1.0)
     # Registry/directory pages routinely reproduce both the legal name and org
-    # number. A candidate must therefore also have the distinctive company name
-    # in its hostname before it is worth crawling as a company-owned website.
+    # number. The hostname rule remains the strict path. A second, crawl-only
+    # path admits a branded domain when the search result itself contains the
+    # exact organisation number and full legal name in the title. The fetched
+    # page still has to pass the independent ownership gate before publication.
     publishable_candidate = score >= 0.75 and name_in_host and (org_match or all_name_tokens_in_title)
+    branded_crawl_candidate = (
+        score >= 0.75 and org_match and all_name_tokens_in_title and not review_marker_match
+    )
+    crawl_eligible = publishable_candidate or branded_crawl_candidate
     return {
-        "status": "accepted_for_crawl" if publishable_candidate else "review" if score >= 0.6 else "rejected",
+        "status": "accepted_for_crawl" if crawl_eligible else "review" if score >= 0.6 else "rejected",
         "score": score,
         "publishable_candidate": publishable_candidate,
+        "crawl_eligible": crawl_eligible,
         "url": normalized,
         "host": host,
         "rank": result.get("rank"),
@@ -128,9 +146,10 @@ def score_search_candidate(profile: dict[str, Any], result: dict[str, Any]) -> d
 def choose_search_candidate(profile: dict[str, Any], results: list[dict[str, Any]]) -> dict[str, Any]:
     assessed = [score_search_candidate(profile, result) for result in results]
     assessed.sort(key=lambda item: (-item.get("score", 0.0), item.get("rank") or 10_000, item.get("url") or ""))
-    accepted = [item for item in assessed if item.get("publishable_candidate")]
+    accepted = [item for item in assessed if item.get("crawl_eligible")]
     return {
         "selected": accepted[0] if accepted else None,
+        "selected_candidates": accepted[:3],
         "candidates": assessed,
         "abstained": not accepted,
         "policy": "A search result is only a crawl candidate. Publication still requires fetched-page exact-entity verification.",

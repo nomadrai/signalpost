@@ -135,7 +135,9 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
     conflicts = sorted(owner_numbers - {org_digits})
     proofs = []
     proof_url = value.get("final_url") or website.get("source_url")
-    guessed = value.get("candidate_source") == "legal_name_domain"
+    search_candidate = value.get("candidate_source") == "transient_firecrawl_search"
+    host_tokens = set(_tokens(hostname))
+    name_in_host = bool(core and set(core).issubset(host_tokens))
     if proof_url and not company_host_allowed(proof_url):
         score = 0.0
         reasons.append("directory, registry, marketplace or social host is not a company-owned website")
@@ -149,9 +151,13 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
         score = 0.3
         reasons.append("ownership evidence identifies a different or multiple organisation numbers")
     elif org_digits in owner_numbers or (org_digits in homepage_numbers and exact_homepage_name):
-        score = 1.0
-        reasons.append("exact organisation number appears in homepage identity evidence")
-        proofs.append("exact_homepage_organisation_number")
+        if search_candidate and not name_in_host and not _corroboration(profile, candidate_text):
+            score = 0.85
+            reasons.append("search candidate has exact organisation evidence but lacks hostname or registered-identity corroboration")
+        else:
+            score = 1.0
+            reasons.append("exact organisation number appears in homepage identity evidence")
+            proofs.append("exact_homepage_organisation_number")
     elif not re.search(r"\b(konsern|group|portfolio)\b", str(value.get("title") or ""), re.I) and any(
         org_digits in organisation_numbers(str(page.get("identity_text_excerpt") or ""))
         and not (organisation_numbers(str(page.get("identity_text_excerpt") or "")) - {org_digits})
@@ -162,7 +168,7 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
         proof_url = page.get("url") or proof_url
         proofs.append("exact_contact_footer_organisation_number_and_legal_name")
         reasons.append("same-site ownership footer gives the exact legal name and organisation number")
-    elif exact_homepage_name and not guessed and _corroboration(profile, candidate_text):
+    elif exact_homepage_name and _corroboration(profile, candidate_text):
         score = 0.95
         proofs = ["exact_legal_name", *_corroboration(profile, candidate_text)]
         reasons.append("exact legal name is independently corroborated by registered identity data")

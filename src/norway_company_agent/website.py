@@ -35,9 +35,9 @@ SOCIAL_HOSTS = {
     "tiktok.com": "tiktok",
 }
 PRIORITY_TERMS = (
-    "om-oss", "om_oss", "about", "kontakt", "contact", "ledelse", "management",
+    "om-oss", "om_oss", "om-bedriften", "om-selskapet", "for-oss", "about", "about-us", "company", "imprint", "legal", "kontakt", "kontakt-oss", "contact", "ledelse", "management",
     "team", "people", "locations", "lokasjoner", "avdelinger", "butikker",
-    "news", "press", "aktuelt", "nyheter",
+    "virksomheten", "organisasjon", "news", "press", "aktuelt", "nyheter",
     "karriere", "career", "jobs", "jobb", "stillinger", "vacancies", "ledige",
 )
 
@@ -228,10 +228,10 @@ def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 4, *, ident
         href = str(anchor.get("href") or "").strip()
         url = urllib.parse.urljoin(base_url, href)
         parsed = urllib.parse.urlparse(url)
-        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != base.netloc.lower():
+        if parsed.scheme not in {"http", "https"} or _registered_domain(url) != _registered_domain(base_url):
             continue
         haystack = (parsed.path + " " + anchor.get_text(" ", strip=True)).casefold()
-        groups = (("kontakt", "contact", "om-oss", "about"), ("stillinger", "ledige", "karriere", "career", "jobs", "jobb", "vacancies"), ("news", "press", "aktuelt", "nyheter"))
+        groups = (("kontakt", "contact", "kontakt-oss", "om-oss", "om-bedriften", "om-selskapet", "for-oss", "about", "about-us", "company", "imprint", "legal", "virksomheten", "organisasjon"), ("stillinger", "ledige", "karriere", "career", "jobs", "jobb", "vacancies"), ("news", "press", "aktuelt", "nyheter"))
         if not identity_needed:
             groups = groups[1:] + groups[:1]
         rank = next((index for index, terms in enumerate(groups) if any(term in haystack for term in terms)), None)
