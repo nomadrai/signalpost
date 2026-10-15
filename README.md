@@ -77,7 +77,7 @@ uv run python scripts/run_competition_batch.py \
 uv run --no-sync --with pytest pytest -q
 ```
 
-The current working tree was verified on October 14, 2026 with 172 tests and 5 subtests, followed by deterministic 1,000/1,100-company matching-universe checks that emitted every terminal envelope with zero outbound requests. Runtime candidate `21b5452` also passed a fresh Python 3.12 clean-clone install with `uv sync --locked --python 3.12` and the exact competition-compatible smoke command. The current uncommitted discovery-recall follow-up is measured in `reports/discovery-recall-follow-up-100.md`; the earlier published archive check was 104 tests and 5 subtests plus a one-company live BRREG smoke run.
+The current release candidate was verified on October 15, 2026 with 186 tests and 10 subtests, followed by a fresh Python 3.12 clean-clone install and the exact competition-compatible 100-company smoke command. Runtime source candidate `7c51966` emitted 100/100 terminal envelopes in 34.657 seconds, reserved 200/200 attempts, declared USD 0, and passed structural validation. The measured default-priority follow-up is recorded in `reports/coverage-priority-follow-up-100.md`; the clean-clone smoke is recorded in `reports/final-candidate-smoke-7c51966.md`.
 
 Increase `--count` and `--expected-count` together for a larger local test. The 100-row smoke test above is practice only; Builderr supplies the companies for every official run.
 
@@ -151,7 +151,7 @@ python scripts/check_batch_limits.py \
   --output-dir <runs>/budget-conformance
 ```
 
-See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, `reports/discovery-allocation-100.md` and `reports/discovery-recall-follow-up-100.md` for opt-in website-discovery measurements, `reports/coverage-profile-workplace-100.md` for the default versus workplace diagnostic comparison, `reports/final-candidate-smoke-21b5452.md` for the current clean-clone smoke, and `docs/submission.md` for the candidate command and declarations.
+See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, `reports/discovery-allocation-100.md` and `reports/discovery-recall-follow-up-100.md` for opt-in website-discovery measurements, `reports/coverage-profile-workplace-100.md` and `reports/coverage-priority-follow-up-100.md` for coverage-priority comparisons, `reports/final-candidate-smoke-7c51966.md` for the current clean-clone smoke, and `docs/submission.md` for the candidate command and declarations.
 
 The optional model transport and deterministic evidence gate were exercised with
 a local provider fixture in `reports/model-assist-integration-100.md`. No real

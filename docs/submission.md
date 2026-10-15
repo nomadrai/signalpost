@@ -9,7 +9,7 @@ score.
 ## Current candidate
 
 - Repository: `https://github.com/nomadrai/signalpost`
-- Runtime source candidate revision verified locally: `afa5cc3a7a3b63dc814c60a53ca7e303a85839b8`
+- Runtime source candidate revision verified locally: `7c51966`
 - Runtime: Python 3.12+
 - Dependency installer: `uv`
 - Default models: none
@@ -23,7 +23,7 @@ From a fresh clone at the exact candidate revision:
 ```bash
 git clone https://github.com/nomadrai/signalpost.git
 cd signalpost
-git checkout 21b5452
+git checkout 7c51966
 uv sync --locked --python 3.12
 ```
 
@@ -61,23 +61,21 @@ current candidate was:
 uv run --no-sync python scripts/run_competition_batch.py \
   --organisations ROOT/runs/phase0/baseline-organisations.jsonl \
   --bulk ROOT/signalpost-company-universe-2025.jsonl/financial-filer-master-2025.jsonl \
-  --profiles-output ROOT/runs/final-smoke-21b5452/profiles.jsonl \
-  --output ROOT/runs/final-smoke-21b5452/envelopes.jsonl \
-  --report ROOT/runs/final-smoke-21b5452/report.json \
-  --run-id final-smoke-21b5452 \
+  --profiles-output ROOT/runs/final-smoke-7c51966/profiles.jsonl \
+  --output ROOT/runs/final-smoke-7c51966/envelopes.jsonl \
+  --report ROOT/runs/final-smoke-7c51966/report.json \
+  --run-id final-smoke-7c51966 \
   --expected-count 100 \
   --workers 8 \
   --deadline-seconds 180 \
   --max-requests 200
 ```
 
-The current clean-source-clone measurement at `afa5cc3` produced 100/100
-terminal envelopes in 78.312 seconds, used 200/200 reserved HTTP attempts,
+The current clean-source-clone measurement at `7c51966` produced 100/100
+terminal envelopes in 34.657 seconds, used 200/200 reserved HTTP attempts,
 declared USD 0, passed structural validation, and reconciled all requests to
 field families with zero unattributed attempts. See
-`reports/final-candidate-smoke-afa5cc3.md`.
-The later packaging commits only record this report and pin the submission
-metadata; runtime source behavior is unchanged.
+`reports/final-candidate-smoke-7c51966.md`.
 
 ## Tests and network-free checks
 
@@ -88,7 +86,7 @@ uv run --no-sync python scripts/check_batch_limits.py \
   --output-dir <runs>/budget-conformance
 ```
 
-The current tree passes 172 tests plus 5 subtests. The large zero-request checks
+The current tree passes 186 tests plus 10 subtests. The large zero-request checks
 produce 1,000 and 1,100 available terminal envelopes with exact identity/source
 attribution. A submitted run should also retain its JSON report, evidence output
 and request ledger for audit.
