@@ -9,7 +9,7 @@ score.
 ## Current candidate
 
 - Repository: `https://github.com/nomadrai/signalpost`
-- Runtime candidate revision verified locally: `21b5452`
+- Runtime candidate revision verified locally: `afa5cc3a7a3b63dc814c60a53ca7e303a85839b8`
 - Runtime: Python 3.12+
 - Dependency installer: `uv`
 - Default models: none
@@ -71,10 +71,11 @@ uv run --no-sync python scripts/run_competition_batch.py \
   --max-requests 200
 ```
 
-The current clean-clone measurement at `21b5452` produced 100/100 terminal
-envelopes in 99.769 seconds, used 200/200 reserved HTTP attempts, declared USD 0, passed
-structural validation, and reconciled all requests to field families with zero
-unattributed attempts. See `reports/final-candidate-smoke-21b5452.md`.
+The current clean-source-clone measurement at `afa5cc3` produced 100/100
+terminal envelopes in 78.312 seconds, used 200/200 reserved HTTP attempts,
+declared USD 0, passed structural validation, and reconciled all requests to
+field families with zero unattributed attempts. See
+`reports/final-candidate-smoke-afa5cc3.md`.
 
 ## Tests and network-free checks
 
@@ -85,7 +86,7 @@ uv run --no-sync python scripts/check_batch_limits.py \
   --output-dir <runs>/budget-conformance
 ```
 
-The current tree passes 137 tests plus 5 subtests. The large zero-request checks
+The current tree passes 172 tests plus 5 subtests. The large zero-request checks
 produce 1,000 and 1,100 available terminal envelopes with exact identity/source
 attribution. A submitted run should also retain its JSON report, evidence output
 and request ledger for audit.
