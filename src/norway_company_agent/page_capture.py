@@ -29,6 +29,42 @@ def source_document(body: bytes, url: str) -> dict[str, Any]:
         if heading and stamp and link:
             articles.append({"title": heading.get_text(" ", strip=True),
                              "date": stamp.get("datetime"), "url": link.get("href")})
+    microdata = []
+    for node in soup.select("[itemscope][itemtype]")[:100]:
+        itemtype = " ".join(str(node.get("itemtype") or "").split())
+        lowered = itemtype.casefold()
+        if not any(kind in lowered for kind in ("jobposting", "newsarticle", "article", "blogposting")):
+            continue
+
+        def prop(*names: str) -> str | None:
+            for name in names:
+                child = node.select_one(f'[itemprop="{name}"]')
+                if child is None:
+                    continue
+                raw = child.get("content") or child.get("datetime") or child.get("href") or child.get_text(" ", strip=True)
+                if raw:
+                    return " ".join(str(raw).split())[:1000]
+            return None
+
+        owner = node.select_one('[itemprop="hiringOrganization"], [itemprop="publisher"]')
+        owner_name = None
+        owner_identifier = None
+        if owner is not None:
+            owner_name_node = owner.select_one('[itemprop="name"]') or owner
+            owner_name = (owner_name_node.get("content") or owner_name_node.get_text(" ", strip=True))[:500] or None
+            identifier = owner.select_one('[itemprop="identifier"]')
+            owner_identifier = ((identifier.get("content") or identifier.get_text(" ", strip=True))[:200] if identifier else None)
+        is_hiring = "jobposting" in lowered
+        microdata.append({
+            "kind": "hiring" if is_hiring else "activity",
+            "itemtype": itemtype,
+            "title": prop("title", "headline", "name"),
+            "date": prop("datePosted", "datePublished", "dateCreated"),
+            "valid_through": prop("validThrough") if is_hiring else None,
+            "url": prop("url") or url,
+            "owner_name": owner_name,
+            "owner_identifier": owner_identifier,
+        })
     description = soup.select_one('meta[name="description"], meta[property="og:description"]')
     identity = " ".join(node.get_text(" ", strip=True) for node in soup.select(
         'footer, address, [itemprop="legalName"], [itemprop="address"], [itemprop="telephone"]'))
@@ -39,7 +75,7 @@ def source_document(body: bytes, url: str) -> dict[str, Any]:
             "description": str(description.get("content") or "") if description else "",
             "identity_text": " ".join(identity.split())[:10000],
             "visible_text": " ".join(soup.get_text(" ", strip=True).split())[:12000],
-            "jsonld": structured, "articles": articles}
+            "jsonld": structured, "articles": articles, "microdata": microdata}
 
 
 def capture_page(body: bytes, *, requested_url: str, final_url: str,

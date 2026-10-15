@@ -108,6 +108,24 @@ def extract_company_signals(profile: dict, website: dict) -> dict[str, dict]:
             if family == "hiring" and node.get("validThrough"):
                 fields["valid_through"] = {"path": [*path, "validThrough"], "transform": "iso_date"}
             candidates.append((family, fields, node.get("hiringOrganization") if family == "hiring" else node.get("publisher"), "jsonld_job_posting" if family == "hiring" else "jsonld_dated_article"))
+        for index, item in enumerate(document.get("microdata") or []):
+            family = item.get("kind")
+            if family not in items:
+                continue
+            path = ["microdata", index]
+            fields = {
+                "title": {"path": [*path, "title"], "transform": "text"},
+                "date_posted" if family == "hiring" else "date": {
+                    "path": [*path, "date"], "transform": "iso_date"
+                },
+                "url": {"path": [*path, "url"], "transform": "url"},
+            }
+            if family == "hiring" and item.get("valid_through"):
+                fields["valid_through"] = {"path": [*path, "valid_through"], "transform": "iso_date"}
+            owner = None
+            if item.get("owner_name") or item.get("owner_identifier"):
+                owner = {"name": item.get("owner_name"), "identifier": item.get("owner_identifier")}
+            candidates.append((family, fields, owner, "microdata_job_posting" if family == "hiring" else "microdata_dated_article"))
         for index, article in enumerate(document.get("articles") or []):
             path = ["articles", index]
             candidates.append(("activity", {key: {"path": [*path, key], "transform": "iso_date" if key == "date" else "url" if key == "url" else "text"}

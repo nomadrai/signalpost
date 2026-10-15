@@ -268,41 +268,72 @@ def _unknowns(sections: dict[str, Any]) -> list[str]:
     return [f"{labels[key]}: {value.get('state', 'not_available')}" for key, value in sections.items() if value.get("state") != "available" and key in labels]
 
 
-def _synthesis(profile: dict[str, Any], claims: list[dict[str, Any]], sections: dict[str, Any]) -> dict[str, Any]:
+def _synthesis_value(value: Any) -> str:
+    if isinstance(value, dict):
+        for key in ("name", "title", "headline", "role", "value"):
+            if value.get(key):
+                return _synthesis_value(value[key])
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(", ", ": "))
+    if isinstance(value, list):
+        return ", ".join(_synthesis_value(item) for item in value)
+    return str(value)
+
+
+def _synthesis(profile: dict[str, Any], claims: list[dict[str, Any]], sections: dict[str, Any], changes: list[dict[str, Any]]) -> dict[str, Any]:
     by_field = {item["field"]: item for item in claims}
     sentences: list[dict[str, Any]] = []
     name = by_field.get("identity.name")
     legal_form = by_field.get("identity.legal_form")
     if name:
-        text = str(name["value"])
+        text = f"{name['value']} is the registered company"
         ids = [name["claim_id"]]
         if legal_form:
-            text += f" is registered as {legal_form['value']}."
+            text += f" ({legal_form['value']})."
             ids.append(legal_form["claim_id"])
         else:
-            text += " appears in the supplied identity snapshot."
+            text += " in the supplied identity snapshot."
         sentences.append({"text": text, "claim_ids": ids})
     employees = by_field.get("identity.employees")
     if employees:
         sentences.append({"text": f"The supplied identity snapshot reports {employees['value']} employees.", "claim_ids": [employees["claim_id"]]})
     industry = by_field.get("identity.industry_label")
     if industry:
-        sentences.append({"text": f"The registered industry is {industry['value']}.", "claim_ids": [industry["claim_id"]]})
-    account_fields = [item for item in claims if item["field"].startswith("accounts.")]
+        sentences.append({"text": f"The registry classifies the company in the {industry['value']} industry.", "claim_ids": [industry["claim_id"]]})
+    description = by_field.get("website.description")
+    if description:
+        sentences.append({"text": f"The verified company website describes its business as: {_synthesis_value(description['value'])}.", "claim_ids": [description["claim_id"]]})
+    elif industry:
+        sentences.append({"text": "No more specific first-party business description was verified.", "claim_ids": [industry["claim_id"]]})
+    account_fields = [item for item in claims if item["field"].startswith("accounts.0.") and item["field"].split(".")[-1] not in {"currency"}]
     if account_fields:
-        first = account_fields[0]
+        selected = account_fields[:4]
+        first = selected[0]
         period = first.get("reporting_period")
         period_text = f" for {period}" if period else ""
-        sentences.append({"text": f"The latest available account record includes {first['field'].split('.', 1)[1]}{period_text}: {first['value']}.", "claim_ids": [first["claim_id"]]})
+        details = "; ".join(f"{item['field'].split('.')[-1].replace('_', ' ')}: {_synthesis_value(item['value'])}" for item in selected)
+        sentences.append({"text": f"The latest available annual accounts{period_text} report {details}.", "claim_ids": [item["claim_id"] for item in selected]})
     role = next((item for item in claims if item["field"] == "leadership.role"), None)
     if role:
         value = role["value"]
         label = value.get("role") if isinstance(value, dict) else value
         person = value.get("name") if isinstance(value, dict) else None
-        sentences.append({"text": f"A registered role is {label}: {person}.", "claim_ids": [role["claim_id"]]})
-    website = by_field.get("website.title") or by_field.get("website.description")
-    if website:
-        sentences.append({"text": f"The verified company website reports: {website['value']}.", "claim_ids": [website["claim_id"]]})
+        subject = f": {person}" if person else ""
+        sentences.append({"text": f"A registered leadership role is {label}{subject}.", "claim_ids": [role["claim_id"]]})
+    workplaces = [item for item in claims if item["field"] == "workplaces.location"]
+    if workplaces:
+        sentences.append({"text": f"The record includes {len(workplaces)} registered workplace(s).", "claim_ids": [item["claim_id"] for item in workplaces]})
+    for family, label in (("hiring", "hiring"), ("activity", "dated public activity")):
+        family_claims = [item for item in claims if item["field"] == f"{family}.item"]
+        if family_claims:
+            sentences.append({"text": f"The verified company site provides {len(family_claims)} {label} item(s) in the captured pages.", "claim_ids": [item["claim_id"] for item in family_claims]})
+    for change in changes[:5]:
+        field = str(change.get("claim_key") or "record")
+        claim = by_field.get(field)
+        claim_ids = [claim["claim_id"]] if claim else []
+        old = _synthesis_value(change.get("old")) if change.get("old") is not None else "not previously recorded"
+        new = _synthesis_value(change.get("new")) if change.get("new") is not None else "no longer present"
+        label = field.replace("_", " ").replace(".", " / ")
+        sentences.append({"text": f"Since the previous snapshot, {label} changed from {old} to {new}.", "claim_ids": claim_ids})
     text = " ".join(sentence["text"] for sentence in sentences)
     return {"text": text, "sentences": sentences, "unknowns": _unknowns(sections)}
 
@@ -475,11 +506,11 @@ def build_contract_envelope(
     status = status_override or ("available" if identity_state == "available" else "failed" if not org else identity_state)
     if status not in AVAILABILITY_STATES:
         status = "failed"
-    synthesis = _synthesis(profile, claims, sections)
     refresh = {
         "previous_run_id": previous_run_id,
         "changes": _refresh_changes(previous, profile),
     }
+    synthesis = _synthesis(profile, claims, sections, refresh["changes"])
     operations = dict(profile.get("run_metrics") or {})
     operations.setdefault("third_party_cost_usd", 0)
     operations.setdefault("requests", 0)

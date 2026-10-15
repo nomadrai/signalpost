@@ -73,6 +73,29 @@ def test_signal_extraction_uses_replay_document_without_retaining_compressed_bod
     assert records["hiring"]["value"]["items"][0]["value"]["title"] == "Senior engineer"
 
 
+def test_extracts_first_party_microdata_when_jsonld_is_not_present():
+    page = _page()
+    page["source_document"] = {
+        "jsonld": [],
+        "articles": [],
+        "microdata": [{
+            "kind": "hiring",
+            "itemtype": "https://schema.org/JobPosting",
+            "title": "Platform engineer",
+            "date": "2026-08-05",
+            "valid_through": "2026-10-01",
+            "url": "https://example.no/jobs/platform",
+            "owner_name": "Example AS",
+            "owner_identifier": None,
+        }],
+    }
+    records = extract_company_signals(_profile([page]), _profile([page])["evidence"]["website"])
+    assert records["hiring"]["status"] == "available"
+    item = records["hiring"]["value"]["items"][0]
+    assert item["value"]["title"] == "Platform engineer"
+    assert item["method"] == "microdata_job_posting"
+
+
 @pytest.mark.parametrize("page", [_page(expired=True), _page(foreign=True)])
 def test_rejects_expired_or_off_host_job_facts(page):
     profile = _profile([page])

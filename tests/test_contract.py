@@ -30,9 +30,9 @@ from run_batch_impl import CATEGORY_PROFILE_TARGETS, COVERAGE_PROFILE_CHOICES, D
 VALID_ORG = "993578843"
 
 
-def test_workplace_diagnostic_profile_is_opt_in_and_default_order_is_unchanged():
+def test_workplace_diagnostic_profile_is_opt_in_and_default_covers_official_categories_first():
     assert priority_for_profile("default") == DEFAULT_PRIORITY
-    assert DEFAULT_PRIORITY.index("website") < DEFAULT_PRIORITY.index("locations")
+    assert DEFAULT_PRIORITY.index("locations") < DEFAULT_PRIORITY.index("website_discovery")
     diagnostic = priority_for_profile("workplace-diagnostic")
     assert diagnostic.index("locations") < diagnostic.index("website")
     assert diagnostic.index("locations") < diagnostic.index("website_discovery")
@@ -207,6 +207,9 @@ def test_viewer_escapes_fetched_text_and_builds_compare_and_changes(tmp_path: Pa
     assert "Ask about this company" in profile
     assert "Local natural-language topic matching only" in profile
     assert "View evidence record" in profile
+    claim_id = row["claims"][0]["claim_id"]
+    assert f'id="claim-{claim_id}"' in profile
+    assert f'href="#claim-{claim_id}"' in profile
     assert "max-width: 1380px" in index
     assert "Explicit coverage" in index
     assert "workplaces-diagnostic" in index

@@ -40,7 +40,7 @@ from norway_company_agent.discovery import website_candidates  # noqa: E402
 
 DEFAULT_PRIORITY = [
     "registry_live", "planner", "website", "financials", "roles", "hiring", "activity",
-    "website_discovery", "model_signals", "locations", "group", "financial_history",
+    "locations", "group", "financial_history", "website_discovery", "model_signals",
 ]
 WORKPLACE_DIAGNOSTIC_PRIORITY = [
     "registry_live", "locations", "planner", "website", "financials", "roles", "hiring", "activity",
@@ -61,7 +61,7 @@ COVERAGE_PROFILE_CHOICES = ("default", "workplace-diagnostic", *CATEGORY_PROFILE
 
 
 def priority_for_profile(profile: str) -> list[str]:
-    """Return an explicit field-family order without changing the default run."""
+    """Return an explicit field-family order with optional diagnostic overrides."""
     if profile == "workplace-diagnostic":
         return list(WORKPLACE_DIAGNOSTIC_PRIORITY)
     target = CATEGORY_PROFILE_TARGETS.get(profile)

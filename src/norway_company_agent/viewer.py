@@ -264,7 +264,7 @@ def _sprite() -> str:
 
 
 COVERAGE_PROFILES = [
-    {"id": "default", "label": "Default balanced profile", "focus": "Keeps the current submission order unchanged.", "note": "Use this for the normal Builderr run."},
+    {"id": "default", "label": "Default balanced profile", "focus": "Completes official categories before optional discovery.", "note": "Use this for the normal Builderr run."},
     {"id": "accounts-diagnostic", "label": "Annual accounts priority", "focus": "Moves annual accounts ahead of optional website work.", "note": "Useful when financial coverage matters most."},
     {"id": "leadership-diagnostic", "label": "Leadership priority", "focus": "Moves registered roles ahead of optional website work.", "note": "Useful when public role coverage matters most."},
     {"id": "workplaces-diagnostic", "label": "Workplaces priority", "focus": "Moves registered subunits ahead of websites and discovery.", "note": "Useful when workplace coverage matters most."},
@@ -367,7 +367,7 @@ def _claim_html(claim: dict[str, Any], snapshots: dict[str, dict[str, Any]]) -> 
     source = " ".join(evidence_parts) or f'{_icon("alert")} No source reference'
     details_html = "".join(f"<div>{item}</div>" for item in details)
     state = str(claim.get("state") or "not_available")
-    return f'''<article class="claim" id="{html.escape(claim_id, quote=True)}"><div class="claim-head"><div class="claim-label">{html.escape(_friendly(str(claim.get("field") or "Fact")))}</div>{_badge(state)}</div><div class="{value_class}">{value}</div><div class="source-row">{source}</div><details class="claim-details"><summary>View evidence record</summary><div class="evidence-grid">{details_html}</div></details></article>'''
+    return f'''<article class="claim" id="claim-{html.escape(claim_id, quote=True)}"><div class="claim-head"><div class="claim-label">{html.escape(_friendly(str(claim.get("field") or "Fact")))}</div>{_badge(state)}</div><div class="{value_class}">{value}</div><div class="source-row">{source}</div><details class="claim-details"><summary>View evidence record</summary><div class="evidence-grid">{details_html}</div></details></article>'''
 
 
 def _section_icon(section: str) -> str:
