@@ -3,6 +3,7 @@
 ## Runtime
 
 - Python 3.12+
+- Project code licence: MIT, as provided in [`LICENSE`](LICENSE). This licence covers the repository's original code and documentation; it does not grant rights to third-party registry, website, platform, model, or search-provider data.
 - `beautifulsoup4`, `extruct`, `lxml`, `pydantic`, `pypdf`, `tldextract`, and `trafilatura` as declared in `pyproject.toml` and locked in `uv.lock`.
 - Release installation: `uv sync --locked --python 3.12`; run commands use `uv run --no-sync`. Runtime behavior and the final smoke were verified at `aded677`; submit the later packaging commit if one is added.
 - Scrapy and scrapy-playwright are optional crawl extras. Browser binaries are not required for the deterministic batch path.

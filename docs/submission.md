@@ -102,7 +102,8 @@ Models: None in the default batch.
 APIs: Public Brønnøysundregistrene endpoints and direct permitted public
       company-page HTTP/HTTPS retrieval.
 Search provider: None enabled in the default batch.
-Licences: Dependencies and source rights are listed in MANIFEST.md,
+Licences: Original repository code and documentation are MIT-licensed in
+          LICENSE. Dependency and source rights are listed in MANIFEST.md,
           LIMITATIONS.md and docs/external-connectors.md.
 Expected third-party cost per official run: USD 0 for the default batch.
 Secrets: None required by the default batch; optional provider credentials are

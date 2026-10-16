@@ -1,5 +1,6 @@
 # Limitations and source rights
 
+- The repository's original code and documentation are released under the MIT License in `LICENSE`. That code licence is separate from the terms, copyright, database rights, robots rules, and usage restrictions governing retrieved registry, website, platform, model, and search-provider content.
 - The official registry and annual-account endpoints are used as public Norwegian sources. Their responses are retained with URL, retrieval time, hash, and reporting period. Registry bulk data is used as the identity snapshot.
 - Company pages are public but company-controlled. They support descriptions, declared contacts, links, and dated activity only after exact-entity verification. Promotional copy is not independent sentiment evidence.
 - Robots rules, terms, rate limits, content size, redirect safety, and server load are respected. A missing or denied source remains visible as a state.

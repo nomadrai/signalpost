@@ -11,6 +11,11 @@ declares USD 0 third-party cost. Builderr supplies the official batch and frozen
 registry snapshot at evaluation time; you do not need the official batch to run
 the project locally or prepare a submission.
 
+The original code and documentation in this repository are licensed under the
+[MIT License](LICENSE). This does not grant permission to copy or redistribute
+third-party registry, website, platform, model, or search-provider content; use
+those sources according to their own terms and rights.
+
 ## What the agent does
 
 - reads a batch of Norwegian organisation numbers;
