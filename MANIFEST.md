@@ -5,7 +5,7 @@
 - Python 3.12, pinned by `.python-version`
 - Project code licence: MIT, as provided in [`LICENSE`](LICENSE). This licence covers the repository's original code and documentation; it does not grant rights to third-party registry, website, platform, model, or search-provider data.
 - `beautifulsoup4`, `extruct`, `lxml`, `pydantic`, `pypdf`, `tldextract`, and `trafilatura` as declared in `pyproject.toml` and locked in `uv.lock`.
-- Release installation: `uv sync --locked --python 3.12`; run commands use `uv run --no-sync`; `make test` is the single offline test command. A Dockerfile provides the same locked runtime in a container. The provider integration and website-planning changes are verified by the current test suite; record the final packaging commit in the submission email.
+- Release installation: `uv sync --locked --python 3.12`; the concise batch command is `uv run --no-sync python scripts/run.py <organisations> <registry-snapshot>`, while `make test` is the single offline test command. A Dockerfile provides the same locked runtime in a container. The provider integration and website-planning changes are verified by the current test suite; record the final packaging commit in the submission email.
 - Scrapy and scrapy-playwright are optional crawl extras. Browser binaries are not required for the deterministic batch path.
 
 ## Sources

@@ -167,6 +167,17 @@ uv run python select_entry_batch.py \
 The smoke command writes profiles, envelopes, a machine-readable report, and a
 request ledger below `out/smoke-100/`. The folder is ignored by Git.
 
+Short form, after creating `data/entry-companies.jsonl` and downloading the
+registry snapshot:
+
+```bash
+uv run --no-sync python scripts/run.py data/entry-companies.jsonl data/brreg-enheter.csv
+```
+
+It derives the input count, creates a timestamped directory under `out/`, and
+enables the bounded planner/search path. Add `--no-planner` for a no-provider
+local run.
+
 ```bash
 mkdir -p out/smoke-100
 uv run python scripts/run_competition_batch.py \

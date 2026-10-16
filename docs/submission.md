@@ -43,6 +43,16 @@ Python 3.12 or newer.
 This is the one-command batch interface. Builderr supplies the two input paths
 at evaluation time:
 
+Concise form:
+
+```bash
+uv run --no-sync python scripts/run.py <organisations.jsonl> <frozen-registry-snapshot.csv-or-jsonl>
+```
+
+It derives the expected input count and creates output files under a timestamped
+`out/` directory. The fully explicit form below is available when fixed output
+paths are required:
+
 ```bash
 uv run --no-sync python scripts/run_competition_batch.py \
   --organisations <organisations.jsonl> \
