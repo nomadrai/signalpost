@@ -49,6 +49,7 @@ class ModelConfig:
     api_key: str = field(repr=False)
     endpoint: str
     model: str
+    provider: str = "custom"
     timeout_seconds: float = 30.0
     max_input_chars: int = 18_000
     max_output_tokens: int = 1_200
@@ -56,44 +57,82 @@ class ModelConfig:
     api_keys: tuple[str, ...] = field(default=(), repr=False)
     requests_per_key_per_day: int = 0
     provider_min_interval_seconds: float = 0.0
+    openrouter_http_referer: str = ""
+    openrouter_app_title: str = "Signalpost"
 
     @classmethod
     def from_environment(cls) -> "ModelConfig":
-        # Choose one credential namespace. Never mix provider keys into a pool
-        # that sends all its credentials to a single endpoint.
-        keys = _secret_values("SIGNALPOST_MODEL_API_KEYS", "SIGNALPOST_MODEL_API_KEY")
-        base = None
-        if not keys:
-            keys = _secret_values("GROQ_API_KEYS", "GROQ_API_KEY")
-            if keys:
-                base = os.environ.get("GROQ_BASE_URL") or "https://api.groq.com/openai/v1"
-        if not keys:
-            keys = _secret_values("OPENAI_API_KEYS", "OPENAI_API_KEY")
-            if keys:
-                base = os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1"
-        if not keys:
-            keys = _secret_values("AI_API_KEY")
-            base = os.environ.get("AI_BASE_URL")
+        # Select one explicit provider namespace. Never mix credentials from
+        # different providers into a pool sent to one endpoint.
+        provider = (os.environ.get("SIGNALPOST_MODEL_PROVIDER") or "").strip().casefold()
+        if provider not in {"", "openai", "openrouter", "groq", "custom"}:
+            provider = "custom"
+        if not provider:
+            if _secret_values("SIGNALPOST_MODEL_API_KEYS", "SIGNALPOST_MODEL_API_KEY"):
+                provider = "custom"
+            elif _secret_values("GROQ_API_KEYS", "GROQ_API_KEY"):
+                provider = "groq"
+            elif _secret_values("OPENROUTER_API_KEYS", "OPENROUTER_API_KEY"):
+                provider = "openrouter"
+            elif _secret_values("OPENAI_API_KEYS", "OPENAI_API_KEY"):
+                provider = "openai"
+            else:
+                provider = "custom"
+
+        provider_keys = {
+            "openai": ("OPENAI_API_KEYS", "OPENAI_API_KEY"),
+            "openrouter": ("OPENROUTER_API_KEYS", "OPENROUTER_API_KEY"),
+            "groq": ("GROQ_API_KEYS", "GROQ_API_KEY"),
+            "custom": ("SIGNALPOST_MODEL_API_KEYS", "SIGNALPOST_MODEL_API_KEY", "AI_API_KEY"),
+        }[provider]
+        keys = _secret_values(*provider_keys)
+        if not keys and provider != "custom":
+            keys = _secret_values("SIGNALPOST_MODEL_API_KEYS", "SIGNALPOST_MODEL_API_KEY")
+        base_defaults = {
+            "openai": "https://api.openai.com/v1",
+            "openrouter": "https://openrouter.ai/api/v1",
+            "groq": "https://api.groq.com/openai/v1",
+            "custom": os.environ.get("AI_BASE_URL") or "https://api.openai.com/v1",
+        }
+        base_names = {
+            "openai": "OPENAI_BASE_URL",
+            "openrouter": "OPENROUTER_BASE_URL",
+            "groq": "GROQ_BASE_URL",
+            "custom": "AI_BASE_URL",
+        }
+        base = os.environ.get(base_names[provider]) or base_defaults[provider]
         api_key = keys[0] if keys else ""
-        endpoint = (
-            os.environ.get("SIGNALPOST_MODEL_ENDPOINT")
-            or base or "https://api.openai.com/v1/chat/completions"
-        ).strip()
+        endpoint = (os.environ.get("SIGNALPOST_MODEL_ENDPOINT") or base).strip()
         if endpoint.endswith("/"):
             endpoint = endpoint[:-1]
         if not endpoint.endswith("/chat/completions"):
             endpoint += "/chat/completions"
-        model = (os.environ.get("SIGNALPOST_MODEL") or os.environ.get("OPENAI_MODEL")
-                 or os.environ.get("AI_MODEL") or "openai/gpt-oss-120b").strip()
+        model_defaults = {
+            "openai": "gpt-5.6-sol",
+            "openrouter": "openai/gpt-5.6-sol",
+            "groq": "openai/gpt-oss-120b",
+            "custom": "openai/gpt-oss-120b",
+        }
+        model_names = {
+            "openai": "OPENAI_MODEL",
+            "openrouter": "OPENROUTER_MODEL",
+            "groq": "GROQ_MODEL",
+            "custom": "AI_MODEL",
+        }
+        model = (os.environ.get("SIGNALPOST_MODEL") or os.environ.get(model_names[provider])
+                 or model_defaults[provider]).strip()
         host = (urllib.parse.urlparse(endpoint).hostname or "").casefold()
-        known_price = (host == "api.groq.com" or host.endswith(".groq.com")) and model == "openai/gpt-oss-120b"
+        known_price = provider == "groq" and (host == "api.groq.com" or host.endswith(".groq.com")) and model == "openai/gpt-oss-120b"
         price_name = "SIGNALPOST_MODEL_COST_PER_CALL_USD"
-        price_default = 0.0 if known_price or price_name in os.environ else float("nan")
-        interval_default = 2.1 if known_price else 0.0
+        # Unknown provider/model pricing must be explicitly supplied. A blank
+        # template value must not accidentally declare a zero-cost call.
+        price_default = 0.0 if known_price else float("nan")
+        interval_default = 2.1 if provider == "groq" else 0.0
         return cls(
             api_key=api_key,
             endpoint=endpoint,
             model=model,
+            provider=provider,
             timeout_seconds=_float_env("SIGNALPOST_MODEL_TIMEOUT_SECONDS", 30.0),
             max_input_chars=_int_env("SIGNALPOST_MODEL_MAX_INPUT_CHARS", 18_000),
             max_output_tokens=_int_env("SIGNALPOST_MODEL_MAX_OUTPUT_TOKENS", 1_200),
@@ -103,11 +142,24 @@ class ModelConfig:
             provider_min_interval_seconds=_float_env(
                 "SIGNALPOST_MODEL_MIN_INTERVAL_SECONDS", interval_default
             ),
+            openrouter_http_referer=(os.environ.get("OPENROUTER_HTTP_REFERER") or "").strip(),
+            openrouter_app_title=(os.environ.get("OPENROUTER_APP_TITLE") or "Signalpost").strip(),
         )
 
     @property
     def configured(self) -> bool:
+        host = (urllib.parse.urlparse(self.endpoint).hostname or "").casefold()
+        known_hosts = {
+            "openai": host == "api.openai.com" or host.endswith(".openai.com"),
+            "openrouter": host == "openrouter.ai" or host.endswith(".openrouter.ai"),
+            "groq": host == "api.groq.com" or host.endswith(".groq.com"),
+        }
+        endpoint_conflict = self.provider != "custom" and any(
+            known_hosts.get(other, False) and other != self.provider
+            for other in ("openai", "openrouter", "groq")
+        )
         return bool(self.credentials and self.endpoint and self.model and self.max_output_tokens
+                    and not endpoint_conflict
                     and math.isfinite(self.cost_per_call_usd) and self.cost_per_call_usd >= 0
                     and math.isfinite(self.provider_min_interval_seconds)
                     and self.provider_min_interval_seconds >= 0)
@@ -119,7 +171,7 @@ class ModelConfig:
     @property
     def provider_rate_limits_shared(self) -> bool:
         host = (urllib.parse.urlparse(self.endpoint).hostname or "").casefold()
-        return host == "api.groq.com" or host.endswith(".groq.com")
+        return self.provider == "groq" or host == "api.groq.com" or host.endswith(".groq.com")
 
     def reservation_cost_usd(self, input_tokens: int) -> float:
         """Return a conservative upper bound for one provider reservation.
@@ -129,7 +181,7 @@ class ModelConfig:
         providers must declare their own cost instead of being guessed.
         """
         host = (urllib.parse.urlparse(self.endpoint).hostname or "").casefold()
-        if (host == "api.groq.com" or host.endswith(".groq.com")) and self.model == "openai/gpt-oss-120b":
+        if (self.provider == "groq" or host == "api.groq.com" or host.endswith(".groq.com")) and self.model == "openai/gpt-oss-120b":
             published = (max(0, int(input_tokens)) * 0.15 + self.max_output_tokens * 0.60) / 1_000_000
             return max(self.cost_per_call_usd, published)
         return self.cost_per_call_usd
@@ -219,18 +271,25 @@ class ModelClient:
                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                     "temperature": 0,
                 }
-                if config.provider_rate_limits_shared:
+                known_openai_compatible = config.provider in {"openai", "openrouter", "groq"} or config.provider_rate_limits_shared
+                if known_openai_compatible:
                     body_payload["max_completion_tokens"] = config.max_output_tokens
                     body_payload["response_format"] = {"type": "json_object"}
                 else:
                     body_payload["max_tokens"] = config.max_output_tokens
                 body = json.dumps(body_payload, ensure_ascii=False).encode("utf-8")
-                request = urllib.request.Request(config.endpoint, data=body, method="POST", headers={
+                headers = {
                     "Accept": "application/json",
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {lease.key}",
                     "User-Agent": "builderr-signalpost-agent/1.0 (+https://builderr.ai)",
-                })
+                }
+                if config.provider == "openrouter":
+                    if config.openrouter_http_referer:
+                        headers["HTTP-Referer"] = config.openrouter_http_referer
+                    if config.openrouter_app_title:
+                        headers["X-Title"] = config.openrouter_app_title
+                request = urllib.request.Request(config.endpoint, data=body, method="POST", headers=headers)
                 with PROVIDER_OPENER.open(request, timeout=bounded_timeout(config.timeout_seconds)) as response:
                     raw = response.read(2_000_001)
                     if len(raw) > 2_000_000:

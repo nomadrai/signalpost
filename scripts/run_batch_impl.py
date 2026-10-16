@@ -473,6 +473,7 @@ def main() -> None:
                         "api_key": model_config.api_key,
                         "endpoint": model_config.endpoint,
                         "model": model_config.model,
+                        "provider": model_config.provider,
                         "timeout_seconds": model_config.timeout_seconds,
                         "max_input_chars": model_config.max_input_chars,
                         "max_output_tokens": model_config.max_output_tokens,
@@ -480,6 +481,8 @@ def main() -> None:
                         "api_keys": model_config.api_keys,
                         "requests_per_key_per_day": model_config.requests_per_key_per_day,
                         "provider_min_interval_seconds": model_config.provider_min_interval_seconds,
+                        "openrouter_http_referer": model_config.openrouter_http_referer,
+                        "openrouter_app_title": model_config.openrouter_app_title,
                     }
                 pool.submit(task, company_timeout)
                 active_module = module

@@ -11,7 +11,7 @@ optional inputs rather than an assumed evaluator dependency.
 
 ## Local checks
 
-- Run the complete Python test suite with `PYTHONPATH=src:. python -m pytest -q`.
+- Run the complete Python test suite with `make test`.
 - Re-open every published claim's referenced snapshot and confirm its locator supports the value.
 - Run the same saved snapshot twice and expect equal claim sets and zero changes.
 - Run with `RUN_DEADLINE_SECONDS=0` and expect one terminal envelope per valid input with registry pass-1 data where the snapshot contains the row.
@@ -21,7 +21,7 @@ optional inputs rather than an assumed evaluator dependency.
 - Budget tests use a local HTTP server to count retries, redirects, robots, and concurrent process exhaustion independently of reported metrics. They also kill unreturned work, verify shared monetary reservations, exercise saved responses at zero budget, and force supervisor recovery before identity loading finishes.
 - Export a saved run with `python scripts/summarize_run.py --envelopes <envelopes.jsonl> --report <report.json> --output <summary.json>`. This validates envelope evidence references and reconciles per-company request totals and the reservation ledger.
 - Verify first-party hiring/activity fixtures with `pytest tests/test_company_signals.py`; these tests must reject expired jobs, off-host links, conflicting organisation numbers, and ambiguous sites while retaining page-specific evidence locators.
-- Report the models, APIs, licences, source rights and expected cost for the exact candidate revision. The default batch has no hosted-model or paid-search dependency. A hosted model key is needed only when an optional model connector is actually invoked; a search-provider key is separate.
+- Report the models, APIs, licences, source rights and expected cost for the exact candidate revision. The submitted provider profile uses OpenAI `gpt-5.6-sol` plus Firecrawl Search; Groq `openai/gpt-oss-120b` plus Firecrawl is the cheaper alternative. Provider keys are injected at runtime and are never committed.
 
 ## Promotion gate
 

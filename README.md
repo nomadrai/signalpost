@@ -6,10 +6,12 @@ source-linked JSONL result per input company. The registry organisation number
 is always the identity anchor; uncertain facts are withheld instead of guessed.
 
 The repository is a runnable reference implementation for the Signalpost
-challenge. The default batch uses no hosted model, no paid search provider, and
-declares USD 0 third-party cost. Builderr supplies the official batch and frozen
-registry snapshot at evaluation time; you do not need the official batch to run
-the project locally or prepare a submission.
+challenge. A no-key local mode remains available, but the submitted search
+profile uses native OpenAI `gpt-5.6-sol` plus Firecrawl. A cheaper Groq
+`openai/gpt-oss-120b` plus Firecrawl profile is documented as an alternative.
+Builderr supplies the official batch and frozen registry snapshot at evaluation
+time; you do not need the official batch to run the project locally or prepare a
+submission.
 
 The original code and documentation in this repository are licensed under the
 [MIT License](LICENSE). This does not grant permission to copy or redistribute
@@ -77,7 +79,45 @@ uv sync --locked --python 3.12
 The project creates `.venv/` locally. It is ignored by Git and does not need to
 be committed.
 
-### 3. Run the no-network example first
+### 3. Configure the submitted search profile
+
+The submitted configuration accepts provider credentials from the evaluator's
+environment. It does not put keys in the repository. Copy the template only if
+you are running the provider-backed path locally:
+
+```bash
+cp .env.example .env.local
+chmod 600 .env.local
+```
+
+Set these values in `.env.local` for the submitted OpenAI + Firecrawl path:
+
+```env
+SIGNALPOST_MODEL_PROVIDER=openai
+OPENAI_API_KEY=your-openai-key
+OPENAI_MODEL=gpt-5.6-sol
+FIRECRAWL_API_KEY=your-firecrawl-key
+SIGNALPOST_MODEL_COST_PER_CALL_USD=your-conservative-openai-call-reservation
+```
+
+Also keep positive `MAX_LLM_CALLS`, `MAX_LLM_TOKENS`, `MAX_SEARCH_CALLS`, and
+`MAX_COST_USD` allowances. The runner never guesses OpenAI or OpenRouter
+pricing. To use the cheaper alternative, switch the provider block to
+`SIGNALPOST_MODEL_PROVIDER=groq`, `GROQ_API_KEY`, and
+`GROQ_MODEL=openai/gpt-oss-120b`; its published Groq price is handled by the
+runner. Load credentials only into the process that runs the batch:
+
+```bash
+set -a
+source ./.env.local
+set +a
+```
+
+The default no-key local mode does not enable provider calls. The submitted
+provider-backed command explicitly uses `--planner-assist` and
+`--discover-websites`.
+
+### 4. Run the no-network example first
 
 This verifies refresh/change detection using only the checked-in fixture. It
 does not download the registry, require credentials, or make live requests.
@@ -92,15 +132,15 @@ Inspect `out/refresh-demo.json`. Its `events` list shows source-backed changes
 between two saved versions of one company profile. The generated `out/` folder
 is ignored by Git.
 
-### 4. Run the test suite
+### 5. Run the test suite
 
 ```bash
-uv run --no-sync --with pytest pytest -q
+make test
 ```
 
-The verified release candidate passes 187 tests plus 10 subtests.
+The verified release candidate passes 190 tests plus 10 subtests.
 
-### 5. Download the public local input data
+### 6. Download the public local input data
 
 This step makes live HTTP requests and downloads public data. Create a local
 `data/` directory, which is ignored for downloaded CSV/JSONL data:
@@ -122,7 +162,7 @@ uv run python select_entry_batch.py \
   --output data/entry-companies.jsonl
 ```
 
-### 6. Run the 100-company local smoke test
+### 7. Run the 100-company local smoke test
 
 The smoke command writes profiles, envelopes, a machine-readable report, and a
 request ledger below `out/smoke-100/`. The folder is ignored by Git.
@@ -144,7 +184,7 @@ validation, and reconciled request attribution. The exact checked-in smoke
 measurement is documented in
 [`reports/final-candidate-smoke-aded677.md`](reports/final-candidate-smoke-aded677.md).
 
-### 7. Run a larger local batch only if needed
+### 8. Run a larger local batch only if needed
 
 Increase `--count` and `--expected-count` together. Builderr supplies the
 official evaluation companies, so local 1,000-company runs are diagnostics,
@@ -166,7 +206,7 @@ uv run python scripts/run_competition_batch.py \
   --expected-count 1000
 ```
 
-### 8. Build and view the static evidence UI
+### 9. Build and view the static evidence UI
 
 After a batch has produced `envelopes.jsonl`, build the dependency-light viewer:
 
@@ -244,8 +284,8 @@ The supported terminal states are `available`, `not_available`, `blocked`, `not_
 - The default shared cap is **2,000 outbound HTTP attempts**. `--max-requests` or `MAX_OUTBOUND_REQUESTS` can lower it. Failed requests, retries, redirects, and robots fetches all reserve a slot before transport. The append-only `<output>.budget.jsonl` ledger records reservations before sending. Domain parsing uses the bundled suffix list and performs no hidden suffix-list download.
 - Saved official responses are consumed first when supplied. Live field-family priority is identity, registry-listed websites, accounts, roles, hiring/activity, workplaces, group, account history, opt-in website discovery, and optional model signals. This keeps official categories from being starved by expensive optional discovery. Websites get at most four attempts per task; official modules get at most two, including retries/redirects. Account-history starts retain a shared 2.1-second minimum interval. Unattempted fields have explicit `not_available` states and budget/deadline reasons; an identity-backed result can still be `available`. Conservative legal-name domain discovery is opt-in with `--discover-websites`; it runs after the stronger default fields and is not a search-provider or model integration.
 - `--response-snapshot <responses.json>` accepts a saved JSON object with `retrieved_at`, optional `effective_at`, and a `responses` map keyed by official URL. Each value has `status`, and either `body` or `raw_json`. Saved responses are consumed first, retain their source timestamps/hashes, count as `snapshot_reads`, and consume no outbound requests. Missing saved responses may use live HTTP within the cap.
-- `--model-assist` enables the optional OpenAI-compatible evidence assistant. Groq can be configured with `GROQ_API_KEY` or comma-separated `GROQ_API_KEYS`; generic `SIGNALPOST_MODEL_API_KEY(S)` aliases remain supported. The model sees only retained exact-company page captures; its output must pass deterministic URL/hash/date/quote validation before publication. For providers with per-key limits, a 429 can fail over to the next key within the shared request/LLM budgets; Groq 429s are treated as organization-wide and do not fail over.
-- `--planner-assist` is a separate opt-in model stage. It can choose a deterministic candidate URL, stop, or request one transient Firecrawl search when positive `MAX_SEARCH_CALLS` is configured. A Firecrawl key is optional for the documented free/keyless path; search results are discarded except for a selected URL, and the normal crawler and exact-company identity gate still control publication. See [runtime and credentials](docs/runtime-and-credentials.md) for configuration and allocation details.
+- `--model-assist` enables the optional OpenAI-compatible evidence assistant. Set `SIGNALPOST_MODEL_PROVIDER=openai` with `OPENAI_API_KEY` and `OPENAI_MODEL=gpt-5.6-sol` for the submitted primary profile, or switch to `openrouter` with `OPENROUTER_API_KEY` and `OPENROUTER_MODEL=openai/gpt-5.6-sol`. Groq's cheaper alternative uses `GROQ_API_KEY` and `GROQ_MODEL=openai/gpt-oss-120b`. The model sees only retained exact-company page captures; its output must pass deterministic URL/hash/date/quote validation before publication.
+- `--planner-assist` is the submitted bounded website-planning stage. With `--discover-websites`, it prefers allowed registry/legal-name candidates and can request one transient Firecrawl search when positive `MAX_SEARCH_CALLS` is configured. Search results are discarded except for a bounded URL frontier; the normal crawler and exact-company identity gate still control publication. See [runtime and credentials](docs/runtime-and-credentials.md) for configuration and allocation details.
 - Normalized universe JSONL is attributed to its published universe source, its exact supplied byte hash, and its local file identifier. It supports identity and the latest-filing-year flag; it supplies no financial amounts, roles, or subunit responses. Local reads have no fabricated HTTP status.
 - Monetary reservations share one **USD 10 maximum** across search and models. `MAX_COST_USD` defaults to zero, and search/model call limits default to zero. `SIGNALPOST_DAILY_COST_CAP_USD` defaults to 10 and `SIGNALPOST_DAILY_COST_LEDGER` defaults to `~/.cache/signalpost/daily-cost.json`, enforcing an additional persistent UTC-day cap across invocations using that same path. An optional local per-key request cap is available. A monetary allowance alone enables no provider.
 - `--resume` reuses completed modules only when the identity snapshot hash matches, and carries forward the same run's request/cost reservations and elapsed time. If the previous run report is absent, live requests are refused because in-flight usage cannot be reconstructed reliably. Keep the same run ID and report path for a resumed run.
@@ -259,7 +299,7 @@ python scripts/check_batch_limits.py \
   --output-dir <runs>/budget-conformance
 ```
 
-See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, `reports/discovery-allocation-100.md` and `reports/discovery-recall-follow-up-100.md` for opt-in website-discovery measurements, `reports/coverage-profile-workplace-100.md` and `reports/coverage-priority-follow-up-100.md` for coverage-priority comparisons, `reports/final-candidate-smoke-aded677.md` for the exact final-commit smoke, and `docs/submission.md` for the candidate command and declarations.
+See `reports/bounded-smoke-100.md` for the live capped-run and 1,000/1,100-company verification results, `reports/coverage-allocation-100.md` for field-family request attribution and request-exhaustion behavior, `reports/discovery-allocation-100.md` and `reports/discovery-recall-follow-up-100.md` for opt-in website-discovery measurements, `reports/coverage-profile-workplace-100.md` and `reports/coverage-priority-follow-up-100.md` for coverage-priority comparisons, `reports/final-candidate-smoke-aded677.md` for the latest 100-company smoke baseline, and `docs/submission.md` for the provider-backed candidate command and declarations.
 
 The optional model transport and deterministic evidence gate were exercised with
 a local provider fixture in `reports/model-assist-integration-100.md`. No real

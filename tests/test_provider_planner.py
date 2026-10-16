@@ -273,6 +273,7 @@ def test_runner_executes_planner_candidates_and_preserves_identity_gate(tmp_path
     )
     environment = {**os.environ,
                    "PYTHONPATH": os.pathsep.join((str(ROOT), str(ROOT / "src"), str(ROOT / "tests"))),
+                   "SIGNALPOST_MODEL_PROVIDER": "openai",
                    "SIGNALPOST_MODEL_API_KEY": "fixture-model-secret",
                    "SIGNALPOST_MODEL_API_KEYS": "",
                    "SIGNALPOST_MODEL_ENDPOINT": base + "/chat/completions",

@@ -59,10 +59,15 @@ def _parse_results(payload: Any, *, query: str) -> list[dict[str, Any]]:
     return parsed
 
 
-def search_company(profile: dict[str, Any], budget, *, timeout: float = 15.0,
-                   count: int = 10, cost_per_call_usd: float | None = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def search_company(profile: dict[str, Any], budget, *, query: str | None = None,
+                   timeout: float = 15.0, count: int = 10,
+                   cost_per_call_usd: float | None = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Perform one bounded Firecrawl search; raw results remain transient."""
-    query = build_company_search_query(profile)
+    exact_query = build_company_search_query(profile)
+    query = " ".join(query.split()) if isinstance(query, str) else exact_query
+    if query != exact_query:
+        return [], {"status": "rejected", "reason": "search query must match the deterministic exact-identity query",
+                    "query_sha256": hashlib.sha256(query.encode("utf-8")).hexdigest()}
     count = max(1, min(10, int(count)))
     query_hash = hashlib.sha256(query.encode("utf-8")).hexdigest()
     if cost_per_call_usd is None:

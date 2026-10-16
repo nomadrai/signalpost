@@ -9,17 +9,19 @@ score.
 ## Current candidate
 
 - Repository: `https://github.com/nomadrai/signalpost`
-- Runtime behavior and final smoke revision: `aded677`
+- Runtime behavior smoke baseline: `aded677`
 - Submission package commit: record the final pushed commit in the submission email
 - Runtime: Python 3.12+
 - Dependency installer: `uv`
-- Default models: none
-- Default paid APIs: none
-- Default declared third-party cost: USD 0
+- Submitted primary model: OpenAI `gpt-5.6-sol`
+- Submitted search provider: Firecrawl Search
+- Cheaper alternative: Groq `openai/gpt-oss-120b` + Firecrawl Search
+- Declared maximum third-party cost: USD 10 per official run
 
-The runtime smoke was run at `aded677`. If the documentation or report receives
-a later packaging commit, submit that later commit so the repository link,
-documentation, and runtime code are all covered by the same exact revision.
+The runtime smoke was run at `aded677`. Submit the later packaging commit that
+contains the provider integration and this documentation update so the
+repository link, documentation, and runtime code are all covered by one exact
+revision.
 
 ## Clean installation
 
@@ -49,7 +51,9 @@ uv run --no-sync python scripts/run_competition_batch.py \
   --output <run>/envelopes.jsonl \
   --report <run>/report.json \
   --run-id <run-id> \
-  --expected-count <input-count>
+  --expected-count <input-count> \
+  --planner-assist \
+  --discover-websites
 ```
 
 The `--bulk` input may be plain/gzip Brønnøysund CSV or normalized universe
@@ -90,7 +94,7 @@ uv run --no-sync python scripts/check_batch_limits.py \
   --output-dir <runs>/budget-conformance
 ```
 
-The current tree passes 187 tests plus 10 subtests. The large zero-request checks
+The current tree passes 190 tests plus 10 subtests. The large zero-request checks
 produce 1,000 and 1,100 available terminal envelopes with exact identity/source
 attribution. A submitted run should also retain its JSON report, evidence output
 and request ledger for audit.
@@ -98,33 +102,35 @@ and request ledger for audit.
 ## Declarations for submission
 
 ```text
-Models: None in the default batch.
-APIs: Public Brønnøysundregistrene endpoints and direct permitted public
-      company-page HTTP/HTTPS retrieval.
-Search provider: None enabled in the default batch.
+Models: OpenAI native `gpt-5.6-sol` for the submitted primary profile.
+        Groq `openai/gpt-oss-120b` + Firecrawl is the cheaper alternative.
+APIs: Public Brønnøysundregistrene endpoints, direct permitted public
+      company-page HTTP/HTTPS retrieval, OpenAI-compatible model endpoint,
+      and Firecrawl Search when provider credentials and allowances are set.
+Search provider: Firecrawl Search, bounded to the shared request/cost budget.
 Licences: Original repository code and documentation are MIT-licensed in
           LICENSE. Dependency and source rights are listed in MANIFEST.md,
           LIMITATIONS.md and docs/external-connectors.md.
-Expected third-party cost per official run: USD 0 for the default batch.
-Secrets: None required by the default batch; optional provider credentials are
-         server-side environment variables only.
+Expected third-party cost per official run: bounded by `MAX_COST_USD`, with a
+          declared maximum of USD 10; actual use depends on the supplied batch
+          and provider reservations.
+Secrets: OpenAI/Groq and Firecrawl credentials are injected server-side by the
+         evaluator environment and are never committed or written to output.
 ```
 
-The default bounded command does not enable Firecrawl Search. A hosted AI model key is not needed unless an
-optional model connector is enabled; Builderr states that a scoring key can be
-requested if one is needed. The optional GPT-assisted command adds
-`--model-assist` after configuring `GROQ_API_KEY(S)` or the generic model-key
-aliases, the compatible endpoint/model, `MAX_LLM_CALLS`, `MAX_LLM_TOKENS`,
-`MAX_COST_USD`, the per-call upper-bound cost and the persistent daily ledger.
-The model only extracts claims from retained verified-site evidence;
-deterministic identity and publication gates remain in force.
+Configure the submitted primary profile with `SIGNALPOST_MODEL_PROVIDER=openai`,
+`OPENAI_API_KEY`, `OPENAI_MODEL=gpt-5.6-sol`, `FIRECRAWL_API_KEY`, positive
+`MAX_LLM_CALLS`, `MAX_LLM_TOKENS`, `MAX_SEARCH_CALLS`, `MAX_COST_USD`, and an
+explicit `SIGNALPOST_MODEL_COST_PER_CALL_USD`. The cheaper alternative switches
+to `SIGNALPOST_MODEL_PROVIDER=groq`, `GROQ_API_KEY`, and
+`GROQ_MODEL=openai/gpt-oss-120b`. The model only chooses bounded website
+actions; deterministic identity and publication gates remain authoritative.
 
-`--planner-assist` is an additional development experiment, not part of the
-default submission command. It can select an allow-listed website candidate or
-invoke one transient Firecrawl search under the shared search/request/cost budgets;
-raw Firecrawl search results are discarded and independently fetched pages remain the
-only publication evidence. The default submission declaration therefore still
-lists no model or search provider.
+`--planner-assist --discover-websites` is the submitted website path. The planner
+prefers allowed registry/legal-name candidates and can invoke one transient
+Firecrawl search under the shared search/request/cost budgets. Raw Firecrawl
+search results are discarded and independently fetched pages remain the only
+publication evidence.
 
 The model transport integration is covered by
 `reports/model-assist-integration-100.md`; that check uses a local provider

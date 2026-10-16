@@ -8,6 +8,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from norway_company_agent.budget import RunBudget, request_scope  # noqa: E402
@@ -105,6 +107,54 @@ def test_model_config_discovers_groq_key_pool(monkeypatch):
     assert config.credentials == ("groq-one", "groq-two")
     assert config.endpoint == "https://api.groq.com/openai/v1/chat/completions"
     assert config.model == "openai/gpt-oss-120b"
+
+
+def test_model_config_supports_openai_primary_openrouter_and_groq_profiles(monkeypatch):
+    for name in (
+        "SIGNALPOST_MODEL_API_KEYS", "SIGNALPOST_MODEL_API_KEY", "SIGNALPOST_MODEL_ENDPOINT",
+        "SIGNALPOST_MODEL", "SIGNALPOST_MODEL_COST_PER_CALL_USD", "OPENAI_API_KEYS", "OPENAI_API_KEY",
+        "OPENAI_BASE_URL", "OPENAI_MODEL", "OPENROUTER_API_KEYS", "OPENROUTER_API_KEY",
+        "OPENROUTER_BASE_URL", "OPENROUTER_MODEL", "GROQ_API_KEYS", "GROQ_API_KEY",
+        "GROQ_BASE_URL", "GROQ_MODEL", "SIGNALPOST_MODEL_PROVIDER",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    monkeypatch.setenv("SIGNALPOST_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-fixture")
+    monkeypatch.setenv("SIGNALPOST_MODEL_COST_PER_CALL_USD", "0.25")
+    openai = ModelConfig.from_environment()
+    assert openai.provider == "openai"
+    assert openai.credentials == ("openai-fixture",)
+    assert openai.endpoint == "https://api.openai.com/v1/chat/completions"
+    assert openai.model == "gpt-5.6-sol"
+    monkeypatch.setenv("SIGNALPOST_MODEL_COST_PER_CALL_USD", "")
+    assert not ModelConfig.from_environment().configured
+    monkeypatch.setenv("SIGNALPOST_MODEL_COST_PER_CALL_USD", "0.25")
+
+    monkeypatch.setenv("SIGNALPOST_MODEL_PROVIDER", "openrouter")
+    monkeypatch.delenv("OPENAI_API_KEY")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-fixture")
+    openrouter = ModelConfig.from_environment()
+    assert openrouter.provider == "openrouter"
+    assert openrouter.credentials == ("openrouter-fixture",)
+    assert openrouter.endpoint == "https://openrouter.ai/api/v1/chat/completions"
+    assert openrouter.model == "openai/gpt-5.6-sol"
+
+    monkeypatch.setenv("SIGNALPOST_MODEL_PROVIDER", "groq")
+    monkeypatch.delenv("OPENROUTER_API_KEY")
+    monkeypatch.setenv("GROQ_API_KEY", "groq-fixture")
+    monkeypatch.delenv("SIGNALPOST_MODEL_COST_PER_CALL_USD")
+    groq = ModelConfig.from_environment()
+    assert groq.provider == "groq"
+    assert groq.credentials == ("groq-fixture",)
+    assert groq.model == "openai/gpt-oss-120b"
+    assert groq.reservation_cost_usd(4000) > 0
+
+    conflict = ModelConfig(
+        api_key="openai-fixture", endpoint="https://api.groq.com/openai/v1/chat/completions",
+        model="gpt-5.6-sol", provider="openai", cost_per_call_usd=0.25,
+    )
+    assert not conflict.configured
 
 
 def test_groq_gpt_oss_published_price_is_used_when_no_override_is_set():
@@ -237,6 +287,47 @@ def test_groq_request_uses_provider_json_mode_and_completion_token_field(monkeyp
     assert captured["response_format"] == {"type": "json_object"}
 
 
+@pytest.mark.parametrize(
+    "provider,model,referer,expected_referer",
+    [("openai", "gpt-5.6-sol", "", None),
+     ("openrouter", "openai/gpt-5.6-sol", "https://github.com/nomadrai/signalpost", "https://github.com/nomadrai/signalpost")],
+)
+def test_openai_family_requests_use_json_completion_contract(monkeypatch, provider, model, referer, expected_referer):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self, _limit):
+            return b'{"choices":[{"message":{"content":"{\\"items\\":[]}"}}]}'
+
+    captured = {}
+
+    def urlopen(request, timeout):
+        captured["body"] = json.loads(request.data)
+        captured["referer"] = request.headers.get("Http-referer")
+        return Response()
+
+    monkeypatch.setattr("norway_company_agent.llm.PROVIDER_OPENER.open", urlopen)
+    config = ModelConfig(
+        api_key="test", endpoint="https://model.example/v1/chat/completions", model=model,
+        provider=provider, max_output_tokens=10, cost_per_call_usd=0.1,
+        openrouter_http_referer=referer,
+    )
+    budget = RunBudget(max_requests=1, governor=type("Governor", (), {
+        "max_llm_calls": 1, "max_llm_tokens": 100, "max_search_calls": 0, "max_cost_usd": 1.0
+    })(), modules=("model_signals",))
+    with request_scope(budget, module="model_signals", max_requests=1):
+        result, _ = ModelClient(config, budget).complete_json(system="Return JSON", user="{}")
+    assert result == {"items": []}
+    assert captured["body"]["max_completion_tokens"] == 10
+    assert captured["body"]["response_format"] == {"type": "json_object"}
+    assert "max_tokens" not in captured["body"]
+    assert captured["referer"] == expected_referer
+
+
 def test_planner_rejects_unapproved_urls_and_accepts_exact_candidates():
     profile = {"organisation_number": ORG, "name": "Example AS", "municipality": "Oslo"}
     candidates = [{"url": "https://example.no/", "source": "registry_snapshot"}]
@@ -274,13 +365,13 @@ def test_planner_search_result_is_deterministically_gated(monkeypatch):
         def complete_json(self, *, system: str, user: str):
             return {
                 "action": "search_company",
-                "query": "Example AS 993578843 Oslo",
+                 "query": '"Example AS" 993578843 Oslo',
                 "reason": "registry website is absent",
             }, {"status": "available", "model": "planner-model"}
 
     monkeypatch.setattr(
         "norway_company_agent.planner.search_company",
-        lambda profile, budget: ([{
+        lambda profile, budget, query=None: ([{
             "url": "https://example.no/", "title": "Example AS",
             "snippet": "993578843", "rank": 1, "provider": "brave_search_api",
         }], {"status": "available", "candidate_count": 1, "raw": "must not persist"}),
@@ -299,11 +390,11 @@ def test_planner_retains_bounded_search_url_frontier_only(monkeypatch):
         budget = object()
 
         def complete_json(self, *, system: str, user: str):
-            return {"action": "search_company", "query": "Example AS 993578843 Oslo"}, {"status": "available", "model": "planner-model"}
+            return {"action": "search_company", "query": '"Example AS" 993578843 Oslo'}, {"status": "available", "model": "planner-model"}
 
     monkeypatch.setattr(
         "norway_company_agent.planner.search_company",
-        lambda profile, budget: ([
+        lambda profile, budget, query=None: ([
             {"url": "https://brand.example/", "title": "Example AS", "snippet": "993578843", "rank": 1, "provider": "fixture", "query": "secret"},
             {"url": "https://second.example/", "title": "Example AS", "snippet": "993578843", "rank": 2, "provider": "fixture", "query": "secret"},
         ], {"status": "available", "candidate_count": 2}),
